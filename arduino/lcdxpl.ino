@@ -26,7 +26,7 @@ const struct s_data_limits {
                 { 117, 108 }, // NAV
                 { 135, 118 }, // COM
                 { 359, 0 },   // DEG
-                { 9999, 0 }}; // 10K
+                { 7777, 0 }}; // 10K
 
 struct s_nav_data {
   uint16_t adf;
