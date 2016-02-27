@@ -1,9 +1,9 @@
 BUILDDIR	:=	./build
 SRC_BASE	:=	../
-TARGET		:= SimData
+TARGET		:= LCDxpl
 
 SOURCES = \
-	src/SimData.cpp src/serial.cpp
+	src/lcdxpl.cpp src/serial.cpp src/datarefs.cpp
 
 LIBS = 
 

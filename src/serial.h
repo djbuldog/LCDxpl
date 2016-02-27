@@ -1,7 +1,7 @@
 #include <iostream>
 #include <fstream>
 
-class serial {
+class Serial {
   //const std::string tty;
   //bool connected;
   std::fstream term;
@@ -10,7 +10,7 @@ class serial {
     //serial();
     int open(std::string tty);
     void close();
-    ~serial();
+    ~Serial();
     int write(const std::string msg);
     const std::string readln();
 };

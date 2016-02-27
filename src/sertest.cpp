@@ -6,7 +6,7 @@
 using namespace std;
 
 main() {
-  serial ser;
+  Serial ser;
   stringstream ss;
   
   ser.open("/dev/ttyACM1");
