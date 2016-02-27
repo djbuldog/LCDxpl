@@ -8,6 +8,10 @@ serial::~serial() {
   this->term.close();
 }
 
+void serial::close() {
+  this->term.close();
+}
+
 int serial::write(const std::string msg) {
   this->term << msg;
   this->term.flush();

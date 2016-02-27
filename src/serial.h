@@ -9,6 +9,7 @@ class serial {
   public:
     //serial();
     int open(std::string tty);
+    void close();
     ~serial();
     int write(const std::string msg);
     const std::string readln();

@@ -26,9 +26,9 @@ class DataRef {
 };
 
 class DataRefInt : public DataRef {
-	int last;
 
 	protected:
+		int last;
 		const std::string getValStr();
   
 	public:
@@ -37,6 +37,17 @@ class DataRefInt : public DataRef {
 		void update();
 		const std::string getSerStr();
 };
+
+class DataRefIntInt : public DataRefInt {
+
+	protected:
+		const std::string getValStr();
+
+	public:
+		DataRefIntInt(const std::string name, const std::string ser_code): DataRefInt(name, ser_code) {}
+	
+};
+
 
 class DataRefFloat : public DataRef {
 	float last;
@@ -86,6 +97,19 @@ const std::string DataRefInt::getValStr() {
 
 /* ******************************************************************* */
 
+const std::string DataRefIntInt::getValStr() {
+	std::stringstream ss;
+	int mhz, khz;
+	
+	mhz = this->last/100;
+	khz = this->last%100;
+	
+	ss << mhz << "." << khz;
+  return ss.str();
+}
+
+/* ******************************************************************* */
+
 void DataRefFloat::update() {
 
 	if (ptr == NULL) return;
@@ -123,6 +147,11 @@ PLUGIN_API int XPluginStart(char *outName, char *outSig, char *outDesc) {
 	datarefs.push_back(new DataRefInt("sim/cockpit2/radios/actuators/transponder_code","SQK"));
 	datarefs.push_back(new DataRefInt("sim/cockpit2/radios/actuators/adf1_frequency_hz","ADF"));
 
+	datarefs.push_back(new DataRefIntInt("sim/cockpit2/radios/actuators/com1_frequency_hz","C1u"));
+	datarefs.push_back(new DataRefIntInt("sim/cockpit2/radios/actuators/com1_standby_frequency_hz","C1s"));
+	datarefs.push_back(new DataRefIntInt("sim/cockpit2/radios/actuators/nav1_frequency_hz","N1u"));
+	datarefs.push_back(new DataRefIntInt("sim/cockpit2/radios/actuators/nav1_standby_frequency_hz","N1s"));
+	
 	/* Only return that we initialized correctly if we found the data ref. */
 
 	for(std::vector<DataRef*>::iterator it = datarefs.begin(); it != datarefs.end(); ++it) {
@@ -145,6 +174,8 @@ PLUGIN_API void	XPluginStop(void) {
     delete *it;
 	}
 	datarefs.clear();
+	
+	ser.close();
 
 }
 
