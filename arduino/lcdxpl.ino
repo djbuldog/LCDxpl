@@ -3,13 +3,21 @@
  */
 
 #include <LiquidCrystal.h>
+#include <Encoder.h>
 
-LiquidCrystal lcd(2, 3, 4, 5, 6, 7);
+LiquidCrystal lcd(A3, A2, 14, 15, A0, A1);
+Encoder knob_down(9,8);
+Encoder knob_up(7,6);
 
 #define SER_BUF_SIZE  25
 
 uint8_t editval = 0;
 uint8_t btn1 = 1;
+uint8_t btn2 = 1;
+uint8_t btn3 = 1;
+unsigned long last_btn_millis = 0; //btn debauncing
+int8_t last_knob_up = 0;
+int8_t last_knob_down = 0;
 char    serbuf[SER_BUF_SIZE];
 uint8_t serpos;
 
@@ -66,9 +74,9 @@ const struct s_ser_parser {
                    {"N1s" , OP_INTINT, NAV_LIMIT,
                       OFFSETOF(nav1_sby_a), OFFSETOF(nav1_sby_b)},
                    {"ADF" , OP_INT, ADF_LIMIT,
-                      OFFSETOF(adf), 0},
+                      OFFSETOF(adf), OFFSETOF(adf)},
                    {"SQK" , OP_INT, SQK_LIMIT,
-                      OFFSETOF(squawk), 0},
+                      OFFSETOF(squawk), OFFSETOF(squawk)},
                    {NULL, OP_NONE, 0, 0} };
 
 const struct s_editvals {
@@ -180,7 +188,9 @@ void setup()
 {
   Serial.begin(9600); 
   lcd.begin(20,4);
-  pinMode(10, INPUT_PULLUP);
+  pinMode(2, INPUT_PULLUP);
+  pinMode(3, INPUT_PULLUP);
+  pinMode(5, INPUT_PULLUP);
   draw_naw_screen(0);
   serpos=0;
   serbuf[serpos]='\0';
@@ -188,16 +198,137 @@ void setup()
 
 void loop() {
   char c;
-  
-  if (digitalRead(10) == LOW) {
+  int8_t tmp1, tmp2;
+
+  if ((millis()-last_btn_millis)>100) {
+
+  if (digitalRead(2) == LOW) {
     if (btn1) {
-      editval=(editval+1)%7;
+      if (editval==1) {
+        tmp1 = navdata.com1_use_a;
+        navdata.com1_use_a = navdata.com1_sby_a;
+        navdata.com1_sby_a = tmp1;
+        tmp1 = navdata.com1_use_b;
+        navdata.com1_use_b = navdata.com1_sby_b;
+        navdata.com1_sby_b = tmp1;
+      } else if (editval==2) {
+        tmp1 = navdata.nav1_use_a;
+        navdata.nav1_use_a = navdata.nav1_sby_a;
+        navdata.nav1_sby_a = tmp1;
+        tmp1 = navdata.nav1_use_b;
+        navdata.nav1_use_b = navdata.nav1_sby_b;
+        navdata.nav1_sby_b = tmp1;
+      } else {
+        editval=0;
+      }
       draw_naw_screen(editval);
       btn1 = 0;
+      last_btn_millis=millis();
     }
   } else { 
-    btn1 = 1; 
+      btn1 = 1; 
+      last_btn_millis=millis();
   }
+
+  if (digitalRead(3) == LOW) {
+    if (btn2) {
+      editval=(editval+1)%7;
+      draw_naw_screen(editval);
+      btn2 = 0;
+      last_btn_millis=millis();
+    }
+  } else { 
+    btn2 = 1; 
+    last_btn_millis=millis();
+  }
+
+  if (digitalRead(5) == LOW) {
+    if (btn3) {
+      editval=(editval)?(editval-1)%7:6;
+      draw_naw_screen(editval);
+      btn3 = 0;
+      last_btn_millis=millis();
+    }
+  } else { 
+    btn3 = 1; 
+    last_btn_millis=millis();
+  }
+
+  }
+
+  tmp1 = knob_up.read();
+  tmp2 = knob_down.read();
+
+//  if ((tmp1 != last_knob_up) || (tmp2 != last_knob_down)) {
+  if ( ((tmp1-last_knob_up)>3) || ((tmp2-last_knob_down)>3) ||
+       ((tmp1-last_knob_up)<-3) || ((tmp2-last_knob_down)<-3) ) {
+
+    struct s_ser_parser *sp_ptr;
+    sp_ptr = const_cast<s_ser_parser*>(&ser_parser[editvals[editval].idpar]);
+    uint8_t offset;
+    int16_t inc;
+
+    if (tmp1 != last_knob_up) {
+      Serial.write("knob up: ");
+      Serial.println(tmp1);
+      knob_up.write(0);
+      last_knob_up = 0;
+      offset = sp_ptr->offset2;
+      inc = (editvals[editval].inc2)*(tmp1/4);
+    }
+
+    if (tmp2 != last_knob_down) {
+      Serial.write("knob down: ");
+      Serial.println(tmp2);
+      knob_down.write(0);
+      last_knob_down = 0;
+      offset = sp_ptr->offset1;
+      inc = (editvals[editval].inc1)*(tmp2/4);
+    }
+
+    if (sp_ptr->op == OP_INT) {
+      uint16_t *val;
+      val = (uint16_t*)((uint8_t*)&navdata + offset);
+      *val += inc;
+          
+      if ((*val) < dlimits[sp_ptr->idlim].min)
+        *val-=inc;
+      if ((*val) > dlimits[sp_ptr->idlim].max)
+        *val-=inc;
+
+      Serial.print(sp_ptr->keyword);
+      Serial.println(*val);
+      Serial.print(offset);
+      Serial.print("<- offset, val ptr->");
+      Serial.println((long)val);
+    }
+    
+    if (sp_ptr->op == OP_INTINT) {
+      uint8_t *val;
+      val = (uint8_t*)&navdata + offset;
+      *val += inc;
+
+      if (offset==sp_ptr->offset1) {
+        if ((*val) < dlimits[sp_ptr->idlim].min)
+          *val=dlimits[sp_ptr->idlim].max;
+        if ((*val) > dlimits[sp_ptr->idlim].max)
+          *val=dlimits[sp_ptr->idlim].min;
+      } else {
+        if ((*val) > 99) *val=0;
+      }
+
+      Serial.print(sp_ptr->keyword);
+      Serial.println(*val);
+      Serial.print(offset);
+      Serial.print("<- offset, val ptr->");
+      Serial.println((long)val);
+    }
+
+    if (sp_ptr->op != OP_NONE) {
+      Serial.println("refreshing screen\n");
+      draw_naw_screen(editval);
+    }
+  }  
 
   if(Serial.available() > 0) {
 
@@ -254,7 +385,7 @@ void loop() {
       serbuf[serpos]='\0';
 
     } else {
-
+/*
       struct s_ser_parser *sp_ptr;
       sp_ptr = const_cast<s_ser_parser*>(&ser_parser[editvals[editval].idpar]);
       uint8_t offset;
@@ -303,15 +434,15 @@ void loop() {
         Serial.println("refreshing screen due to val update");
         draw_naw_screen(editval);
       } else {
-        if (serpos<SER_BUF_SIZE) {
+*/        if (serpos<SER_BUF_SIZE) {
           serbuf[serpos++]=c;
           serbuf[serpos]='\0';
         }
-      }
+//      }
       
     }
   }
   
-  delay(10);
+  //delay(10);
 
 }
