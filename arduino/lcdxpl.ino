@@ -211,6 +211,7 @@ void loop() {
         tmp1 = navdata.com1_use_b;
         navdata.com1_use_b = navdata.com1_sby_b;
         navdata.com1_sby_b = tmp1;
+        Serial.println("C1X");
       } else if (editval==2) {
         tmp1 = navdata.nav1_use_a;
         navdata.nav1_use_a = navdata.nav1_sby_a;
@@ -218,6 +219,7 @@ void loop() {
         tmp1 = navdata.nav1_use_b;
         navdata.nav1_use_b = navdata.nav1_sby_b;
         navdata.nav1_sby_b = tmp1;
+        Serial.println("N1X");
       } else {
         editval=0;
       }
@@ -269,8 +271,8 @@ void loop() {
     int16_t inc;
 
     if (tmp1 != last_knob_up) {
-      Serial.write("knob up: ");
-      Serial.println(tmp1);
+/*      Serial.write("knob up: ");
+      Serial.println(tmp1);*/
       knob_up.write(0);
       last_knob_up = 0;
       offset = sp_ptr->offset2;
@@ -278,8 +280,8 @@ void loop() {
     }
 
     if (tmp2 != last_knob_down) {
-      Serial.write("knob down: ");
-      Serial.println(tmp2);
+/*      Serial.write("knob down: ");
+      Serial.println(tmp2);*/
       knob_down.write(0);
       last_knob_down = 0;
       offset = sp_ptr->offset1;
@@ -298,9 +300,9 @@ void loop() {
 
       Serial.print(sp_ptr->keyword);
       Serial.println(*val);
-      Serial.print(offset);
+/*      Serial.print(offset);
       Serial.print("<- offset, val ptr->");
-      Serial.println((long)val);
+      Serial.println((long)val);*/
     }
     
     if (sp_ptr->op == OP_INTINT) {
@@ -318,14 +320,19 @@ void loop() {
       }
 
       Serial.print(sp_ptr->keyword);
+      val = (uint8_t*)&navdata + sp_ptr->offset1;
+      Serial.print(*val);
+      Serial.print(".");
+      val = (uint8_t*)&navdata + sp_ptr->offset2;
       Serial.println(*val);
-      Serial.print(offset);
+      
+/*      Serial.print(offset);
       Serial.print("<- offset, val ptr->");
-      Serial.println((long)val);
+      Serial.println((long)val);*/
     }
 
     if (sp_ptr->op != OP_NONE) {
-      Serial.println("refreshing screen\n");
+//      Serial.println("refreshing screen\n");
       draw_naw_screen(editval);
     }
   }  
@@ -335,17 +342,17 @@ void loop() {
     c = Serial.read();
     
     if (c==10) {
-
-      Serial.write("Your data master: ");
+/*
+      Serial.write("Received: ");
       Serial.write(serbuf);
       Serial.write('\n');
-
+*/
       struct s_ser_parser *sp_ptr;
       sp_ptr = const_cast<s_ser_parser*>(&ser_parser[0]);
       while(sp_ptr->keyword) {
         if(strncmp(serbuf, sp_ptr->keyword, 3)==0) {
-          Serial.println(sp_ptr->keyword);
-          Serial.println("match!");
+//          Serial.println(sp_ptr->keyword);
+//          Serial.println("match!");
           break;
         }
         sp_ptr++;
@@ -356,7 +363,7 @@ void loop() {
         if (sp_ptr->op == OP_INT) {
           uint16_t *val;
           val = (uint16_t*)((uint8_t*)&navdata + sp_ptr->offset1);
-          *val = atoi(&serbuf[4]);
+          *val = atoi(&serbuf[3]);
           
           if ((*val) < dlimits[sp_ptr->idlim].min)
             *val=dlimits[sp_ptr->idlim].min;
@@ -368,7 +375,7 @@ void loop() {
           uint8_t *val1, *val2;
           val1 = (uint8_t*)&navdata + sp_ptr->offset1;
           val2 = (uint8_t*)&navdata + sp_ptr->offset2;
-          sscanf(&serbuf[4],"%03hhu.%02hhu",val1,val2);
+          sscanf(&serbuf[3],"%03hhu.%02hhu",val1,val2);
 
           if ((*val1) < dlimits[sp_ptr->idlim].min)
             *val1=dlimits[sp_ptr->idlim].min;
@@ -377,7 +384,7 @@ void loop() {
           
         }
         
-        Serial.println("refreshing screen due to val update");
+//        Serial.println("refreshing screen due to val update");
         draw_naw_screen(editval);
       }
 
