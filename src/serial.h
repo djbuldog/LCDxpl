@@ -1,16 +1,15 @@
-#include <iostream>
-#include <fstream>
+#include <string>
 
 class Serial {
-  //const std::string tty;
-  //bool connected;
-  std::fstream term;
- 
+  
+  int tty_fd;
+  bool opened;
+     
   public:
-    //serial();
-    int open(std::string tty);
-    void close();
+    Serial(): opened(false) {}
     ~Serial();
+    int open(const std::string tty);
+    void close();
     int write(const std::string msg);
     const std::string readln();
 };

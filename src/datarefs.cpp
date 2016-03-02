@@ -1,5 +1,5 @@
 #include "datarefs.h"
-
+#include <cstring>
 
 void DataRef::assign(const std::string name, const std::string ser_code) {
 	//std::cerr << "LCDxpl: Called assign with " << name << ", " << ser_code << std::endl;
@@ -9,38 +9,77 @@ void DataRef::assign(const std::string name, const std::string ser_code) {
 }
 
 const std::string DataRef::getSerStr() {
-	this->changed = false;
+	changed = false;
 	std::string retval(ser_code);
-	return retval + " " + getValStr() + '\n';
+	return retval + getValStr() + '\n';
 }
 
 /* ******************************************************************* */
 
-void DataRefInt::update() {
+void DataRefInt::update(std::string command) {
 
 	if (ptr == NULL) return;
-
-	int val = XPLMGetDatai(this->ptr);
-	if (val!=this->last) {
+	
+	int val = XPLMGetDatai(ptr);
+	if (val!=last) {
 		changed = true;
 		last=val;
 	}  
+
+	if (!command.empty()) {
+	  if (strncmp(command.c_str(),ser_code.c_str(),ser_code.size()) == 0) {
+	    std::istringstream is(command.c_str()+ser_code.size());
+	    is >> val;
+	    if (val!=last) {
+	      XPLMSetDatai(ptr,val);
+	      changed = false;
+	      last=val;
+	    }
+	  }
+	}
+
 }
 
 const std::string DataRefInt::getValStr() {
 	std::stringstream ss;
-	ss << this->last;
+	ss << last;
   return ss.str();
 }
 
 /* ******************************************************************* */
 
+void DataRefIntInt::update(std::string command) {
+
+	if (ptr == NULL) return;
+	
+	int val = XPLMGetDatai(ptr);
+	if (val!=last) {
+		changed = true;
+		last=val;
+	}  
+
+	if (!command.empty()) {
+	  if (strncmp(command.c_str(),ser_code.c_str(),ser_code.size()) == 0) {
+	    std::istringstream is(command.c_str()+ser_code.size());
+	    float val2;
+	    is >> val2;
+	    val = val2*100;
+	    if (val!=last) {
+	      XPLMSetDatai(ptr,val);
+	      changed = false;
+	      last=val;
+	    }
+	  }
+	}
+
+}
+
 const std::string DataRefIntInt::getValStr() {
 	std::stringstream ss;
 	int mhz, khz;
 	
-	mhz = this->last/100;
-	khz = this->last%100;
+	mhz = last/100;
+	khz = last%100;
 	
 	ss << mhz << "." << khz;
   return ss.str();
@@ -48,20 +87,33 @@ const std::string DataRefIntInt::getValStr() {
 
 /* ******************************************************************* */
 
-void DataRefFloat::update() {
+void DataRefFloat::update(std::string command) {
 
 	if (ptr == NULL) return;
 
-	float val = XPLMGetDatai(this->ptr);
-	if (val!=this->last) {
+	float val = XPLMGetDataf(ptr);
+	if (val!=last) {
 		changed = true;
 		last=val;
 	}  
+	
+	if (!command.empty()) {
+	  if (strncmp(command.c_str(),ser_code.c_str(),ser_code.size()) == 0) {
+	    std::istringstream is(command.c_str()+ser_code.size());
+	    is >> val;
+	    if (val!=last) {
+	      XPLMSetDataf(ptr,val);
+	      changed = false;
+	      last=val;
+	    }
+	  }
+	}
+	
 }
 
 const std::string DataRefFloat::getValStr() {
 	std::stringstream ss;
-	ss << this->last;
+	ss << last;
   return ss.str();
 }
 

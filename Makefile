@@ -1,6 +1,6 @@
 BUILDDIR	:=	./build
 SRC_BASE	:=	../
-TARGET		:= LCDxpl
+TARGET		:=	LCDxpl
 
 SOURCES = \
 	src/lcdxpl.cpp src/serial.cpp src/datarefs.cpp
@@ -12,6 +12,8 @@ INCLUDES = \
 	-I$(SRC_BASE)/SDK/CHeaders/Widgets
 
 DEFINES = -DAPL=0 -DIBM=0 -DLIN=1
+
+XPLUGDIR = "/opt/X-Plane 10/Resources/plugins/"
 
 ############################################################################
 
@@ -89,9 +91,16 @@ $(BUILDDIR)/obj64/%.o : %.cpp
 	g++ $(CFLAGS) -m64 -c $< -o $@
 	g++ $(CFLAGS) -MM -MT $@ -o $(@:.o=.cppdep) $<
 
+install:
+	cp -r $(BUILDDIR)/$(TARGET) $(XPLUGDIR)
+
+sertest:
+	g++ src/serial.cpp src/sertest.cpp -o sertest
+
 clean:
 	@echo Cleaning out everything.
 	rm -rf $(BUILDDIR)
+	rm sertest
 
 # Include any dependency turds, but don't error out if they don't exist.
 # On the first build, every .c is dirty anyway.  On future builds, if the

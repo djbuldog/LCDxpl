@@ -14,7 +14,7 @@ class DataRef {
 		void assign(const std::string name, const std::string ser_code);
 		bool isChanged() { return changed; };
 		bool isInit() { return (ptr!=NULL); }
-		virtual void update() =0;
+		virtual void update(std::string command) =0;
 		const std::string getSerStr();
 		
 };
@@ -30,7 +30,7 @@ class DataRefInt : public DataRef {
 	public:
 		DataRefInt(): last(0), DataRef() {}
 		DataRefInt(const std::string name, const std::string ser_code): DataRef(), last(0) { assign(name, ser_code); }
-		void update();
+		void update(std::string command);
 		const std::string getSerStr();
 };
 
@@ -43,6 +43,7 @@ class DataRefIntInt : public DataRefInt {
 
 	public:
 		DataRefIntInt(const std::string name, const std::string ser_code): DataRefInt(name, ser_code) {}
+		void update(std::string command);
 	
 };
 
@@ -57,7 +58,7 @@ class DataRefFloat : public DataRef {
   
 	public:
 		DataRefFloat(): last(0.0), DataRef() {}
-		void update();
+		void update(std::string command);
 		const std::string getSerStr();
 };
 

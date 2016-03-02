@@ -1,4 +1,6 @@
 #include <cstring>
+#include <string>
+#include <iostream>
 #include <vector>
 #include "XPLMProcessing.h"
 
@@ -65,8 +67,13 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFromWho, int inMessage, voi
 
 float FlightLoopCallback(float inElapsedSinceLastCall, float inElapsedTimeSinceLastFlightLoop, int inCounter, void* inRefcon) {
 
+  std::string command(ser.readln());
+  if (!command.empty()) {
+    std::cerr << "rec: " << command << std::endl;
+  }
+
 	for(std::vector<DataRef*>::iterator it = datarefs.begin(); it != datarefs.end(); ++it) {
-		(*it)->update();
+		(*it)->update(command);
 		if ((*it)->isChanged()) {
 			ser.write((*it)->getSerStr());
 		}

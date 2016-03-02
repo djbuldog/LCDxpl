@@ -32,7 +32,7 @@ const struct s_data_limits {
   uint8_t   min;
 } dlimits[] = { { 535, 190 }, // ADF
                 { 117, 108 }, // NAV
-                { 135, 118 }, // COM
+                { 136, 118 }, // COM
                 { 359, 0 },   // DEG
                 { 7777, 0 }}; // 10K
 
@@ -85,7 +85,7 @@ const struct s_editvals {
   uint8_t idpar;
 } editvals[] = { {0, 0, 6},      //NULL
                  {1, 1, 1},      //COM STBY
-                 {1, 1, 3},      //NAV STBY
+                 {1, 5, 3},      //NAV STBY
                  {100, 10, 4},   //ADF high
                  {1, 1, 4},      //ADF low
                  {1000, 100, 5}, //SQK high
@@ -342,11 +342,11 @@ void loop() {
     c = Serial.read();
     
     if (c==10) {
-/*
+
       Serial.write("Received: ");
       Serial.write(serbuf);
       Serial.write('\n');
-*/
+
       struct s_ser_parser *sp_ptr;
       sp_ptr = const_cast<s_ser_parser*>(&ser_parser[0]);
       while(sp_ptr->keyword) {
@@ -364,7 +364,8 @@ void loop() {
           uint16_t *val;
           val = (uint16_t*)((uint8_t*)&navdata + sp_ptr->offset1);
           *val = atoi(&serbuf[3]);
-          
+
+      // ZKUSIT UDELAT FUNKCI ... template??? 
           if ((*val) < dlimits[sp_ptr->idlim].min)
             *val=dlimits[sp_ptr->idlim].min;
           if ((*val) > dlimits[sp_ptr->idlim].max)
@@ -377,6 +378,7 @@ void loop() {
           val2 = (uint8_t*)&navdata + sp_ptr->offset2;
           sscanf(&serbuf[3],"%03hhu.%02hhu",val1,val2);
 
+      // ZKUSIT UDELAT FUNKCI ... template??? 
           if ((*val1) < dlimits[sp_ptr->idlim].min)
             *val1=dlimits[sp_ptr->idlim].min;
           if ((*val1) > dlimits[sp_ptr->idlim].max)
