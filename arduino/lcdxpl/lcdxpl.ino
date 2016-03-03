@@ -28,13 +28,14 @@ uint8_t serpos;
 #define SQK_LIMIT   4
 
 const struct s_data_limits {
-  uint16_t  max;
-  uint8_t   min;
-} dlimits[] = { { 535, 190 }, // ADF
-                { 117, 108 }, // NAV
-                { 136, 118 }, // COM
-                { 359, 0 },   // DEG
-                { 7777, 0 }}; // 10K
+  uint16_t  max; // max number
+  uint8_t   min; // min number/digit
+  uint8_t  maxd; // max digit, 0 = no check
+} dlimits[] = { { 999, 0, 9 },    // ADF // 190-535?
+                { 117, 108, 0 },  // NAV
+                { 136, 118, 0 },  // COM
+                { 359, 0, 0 },    // DEG
+                { 7777, 0, 7 }};  // SQK
 
 struct s_nav_data {
   uint16_t adf;
@@ -205,23 +206,26 @@ void loop() {
   if (digitalRead(2) == LOW) {
     if (btn1) {
       if (editval==1) {
-        tmp1 = navdata.com1_use_a;
+/*        tmp1 = navdata.com1_use_a;
         navdata.com1_use_a = navdata.com1_sby_a;
         navdata.com1_sby_a = tmp1;
         tmp1 = navdata.com1_use_b;
         navdata.com1_use_b = navdata.com1_sby_b;
         navdata.com1_sby_b = tmp1;
-        Serial.println("C1X");
+*/        Serial.println("C1X");
       } else if (editval==2) {
-        tmp1 = navdata.nav1_use_a;
+/*        tmp1 = navdata.nav1_use_a;
         navdata.nav1_use_a = navdata.nav1_sby_a;
         navdata.nav1_sby_a = tmp1;
         tmp1 = navdata.nav1_use_b;
         navdata.nav1_use_b = navdata.nav1_sby_b;
         navdata.nav1_sby_b = tmp1;
-        Serial.println("N1X");
+*/        Serial.println("N1X");
       } else {
         editval=0;
+        lcd.noDisplay();
+        delay(100);
+        lcd.display();
       }
       draw_naw_screen(editval);
       btn1 = 0;
@@ -275,8 +279,8 @@ void loop() {
       Serial.println(tmp1);*/
       knob_up.write(0);
       last_knob_up = 0;
-      offset = sp_ptr->offset2;
-      inc = (editvals[editval].inc2)*(tmp1/4);
+      offset = sp_ptr->offset1;
+      inc = (editvals[editval].inc1)*(tmp1/4);
     }
 
     if (tmp2 != last_knob_down) {
@@ -284,19 +288,32 @@ void loop() {
       Serial.println(tmp2);*/
       knob_down.write(0);
       last_knob_down = 0;
-      offset = sp_ptr->offset1;
-      inc = (editvals[editval].inc1)*(tmp2/4);
+      offset = sp_ptr->offset2;
+      inc = (editvals[editval].inc2)*(tmp2/4);
     }
 
     if (sp_ptr->op == OP_INT) {
       uint16_t *val;
       val = (uint16_t*)((uint8_t*)&navdata + offset);
+
+
+      if (dlimits[sp_ptr->idlim].maxd) {
+
+        int8_t num = ((*val)/((inc<0)?-inc:inc))%10;
+        if ( ((num==dlimits[sp_ptr->idlim].maxd) && (inc>0)) || 
+             ((num==dlimits[sp_ptr->idlim].min) && (inc<0))) {          
+          inc = -(dlimits[sp_ptr->idlim].maxd*inc);
+        }
+      }
+             
       *val += inc;
-          
-      if ((*val) < dlimits[sp_ptr->idlim].min)
-        *val-=inc;
-      if ((*val) > dlimits[sp_ptr->idlim].max)
-        *val-=inc;
+
+      if (!dlimits[sp_ptr->idlim].maxd) {
+        if ( ((*val) < dlimits[sp_ptr->idlim].min) ||
+             ((*val) > dlimits[sp_ptr->idlim].max)) {
+          *val-=inc;
+        }          
+      }
 
       Serial.print(sp_ptr->keyword);
       Serial.println(*val);
@@ -316,7 +333,9 @@ void loop() {
         if ((*val) > dlimits[sp_ptr->idlim].max)
           *val=dlimits[sp_ptr->idlim].min;
       } else {
-        if ((*val) > 99) *val=0;
+        if (*val > 99) {
+          *val=(inc>0)?0:100+inc;
+        }
       }
 
       Serial.print(sp_ptr->keyword);
@@ -324,6 +343,7 @@ void loop() {
       Serial.print(*val);
       Serial.print(".");
       val = (uint8_t*)&navdata + sp_ptr->offset2;
+      if (*val<10) Serial.print("0");
       Serial.println(*val);
       
 /*      Serial.print(offset);
@@ -365,11 +385,11 @@ void loop() {
           val = (uint16_t*)((uint8_t*)&navdata + sp_ptr->offset1);
           *val = atoi(&serbuf[3]);
 
-      // ZKUSIT UDELAT FUNKCI ... template??? 
           if ((*val) < dlimits[sp_ptr->idlim].min)
             *val=dlimits[sp_ptr->idlim].min;
           if ((*val) > dlimits[sp_ptr->idlim].max)
             *val=dlimits[sp_ptr->idlim].max;
+
         }
 
         if (sp_ptr->op == OP_INTINT) {
@@ -378,7 +398,6 @@ void loop() {
           val2 = (uint8_t*)&navdata + sp_ptr->offset2;
           sscanf(&serbuf[3],"%03hhu.%02hhu",val1,val2);
 
-      // ZKUSIT UDELAT FUNKCI ... template??? 
           if ((*val1) < dlimits[sp_ptr->idlim].min)
             *val1=dlimits[sp_ptr->idlim].min;
           if ((*val1) > dlimits[sp_ptr->idlim].max)
