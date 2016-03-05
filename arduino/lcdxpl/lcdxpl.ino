@@ -79,18 +79,31 @@ const struct s_ser_parser {
                    {"SQK" , OP_INT, SQK_LIMIT,
                       OFFSETOF(squawk), OFFSETOF(squawk)},
                    {NULL, OP_NONE, 0, 0} };
-
+/*
 const struct s_editvals {
   uint16_t inc1;
   uint8_t inc2;
   uint8_t idpar;
 } editvals[] = { {0, 0, 6},      //NULL
-                 {1, 1, 1},      //COM STBY
+                 {1, 2, 1},      //COM STBY
                  {1, 5, 3},      //NAV STBY
                  {100, 10, 4},   //ADF high
-                 {1, 1, 4},      //ADF low
+                 {10, 1, 4},     //ADF low
                  {1000, 100, 5}, //SQK high
                  {10, 1, 5} };   //SQK low
+*/
+const struct s_editvals {
+  uint16_t inc1;
+  uint8_t inc2;
+  uint8_t idpar;
+} editvals[] = { {0, 0, 6},      //NULL
+                 {1, 2, 0},      //COM STBY
+                 {1, 5, 2},      //NAV STBY
+                 {100, 10, 4},   //ADF high
+                 {10, 1, 4},     //ADF low
+                 {1000, 100, 5}, //SQK high
+                 {10, 1, 5} };   //SQK low
+
 
 /*
  * dava rotacni
@@ -135,6 +148,16 @@ const char *sc[][4] = { // ------ screen 0 ----
                           "NAV1 000.00 (000.00)",
                           "     ADF  0 0 0     ",
                           "   QUAWK  0 7 7 7   " },
+                        // ------ screen 1 ----
+                        { "    COM1  000.00    ",
+                          "    NAV1  000.00    ",
+                          "     ADF  0 0 0     ",
+                          "   QUAWK  0 7 7 7   " },
+                        // ------ screen 1 ----
+                        { "     COM  NAV       ",
+                          "  000.00  000.00    ",
+                          "     ADF  0 0 0     ",
+                          "   QUAWK  0 7 7 7   " },
                         // ------ screen 1 ---- 
                         { "        QNH         ",
                           "  1022 hpa / 2992   ",
@@ -154,7 +177,7 @@ void draw_static(uint8_t screen) {
   }
 }
 */
-
+/*
 void draw_naw_screen(uint8_t seledit) {
   char screen[4][21];
   char adf_squawk[3+4+1];
@@ -163,7 +186,6 @@ void draw_naw_screen(uint8_t seledit) {
   if (seledit--) {
     lr[seledit*2]='[';
     lr[seledit*2+1]=']';
-    if (seledit==3) lr[5]='[';
     if (seledit==5) lr[9]='[';
   }
 
@@ -173,9 +195,37 @@ void draw_naw_screen(uint8_t seledit) {
           navdata.com1_use_b, lr[0], navdata.com1_sby_a, navdata.com1_sby_b, lr[1]);
   sprintf(&screen[1][0],"NAV1 %03hu.%02hu %c%03hu.%02hu%c", navdata.nav1_use_a, 
           navdata.nav1_use_b, lr[2], navdata.nav1_sby_a, navdata.nav1_sby_b, lr[3]);
-  sprintf(&screen[2][0],"     ADF %c%c %c%c%c%c    ", 
-          lr[4], adf_squawk[0], adf_squawk[1], lr[5], adf_squawk[2], lr[7]);
+  sprintf(&screen[2][0],"     ADF %c%c%c%c%c%c%c    ", 
+          lr[4], adf_squawk[0], lr[6], adf_squawk[1], lr[5], adf_squawk[2], lr[7]);
   sprintf(&screen[3][0],"  SQUAWK %c%c %c%c%c %c%c  ", 
+          lr[8], adf_squawk[3], adf_squawk[4], lr[9], adf_squawk[5], adf_squawk[6], lr[11]);
+
+  for (uint8_t i=0; i<4; ++i) {
+    lcd.setCursor(0,i);
+    lcd.print(screen[i]);
+  }
+}
+*/
+void draw_naw_screen(uint8_t seledit) {
+  char screen[4][21];
+  char adf_squawk[3+4+1];
+  char lr[] = "            ";
+
+  if (seledit--) {
+    lr[seledit*2]='[';
+    lr[seledit*2+1]=']';
+    if (seledit==5) lr[9]='[';
+  }
+
+  sprintf(&adf_squawk[0],"%03hu%04u", navdata.adf, navdata.squawk);
+
+  sprintf(&screen[0][0],"C152  COM %c%03hu.%02hu%c  ", 
+          lr[0], navdata.com1_use_a, navdata.com1_use_b, lr[1]);
+  sprintf(&screen[1][0],"      NAV %c%03hu.%02hu%c  ",
+          lr[2], navdata.nav1_use_a, navdata.nav1_use_b, lr[3]);
+  sprintf(&screen[2][0],"      ADF %c%c%c%c%c%c%c   ", 
+          lr[4], adf_squawk[0], lr[6], adf_squawk[1], lr[5], adf_squawk[2], lr[7]);
+  sprintf(&screen[3][0],"   SQUAWK %c%c %c%c%c %c%c ", 
           lr[8], adf_squawk[3], adf_squawk[4], lr[9], adf_squawk[5], adf_squawk[6], lr[11]);
 
   for (uint8_t i=0; i<4; ++i) {
@@ -223,9 +273,6 @@ void loop() {
 */        Serial.println("N1X");
       } else {
         editval=0;
-        lcd.noDisplay();
-        delay(100);
-        lcd.display();
       }
       draw_naw_screen(editval);
       btn1 = 0;
@@ -260,6 +307,15 @@ void loop() {
     last_btn_millis=millis();
   }
 
+  if (!btn3 && !btn2) {
+    // try to fix LCD screen
+    lcd.begin(20,4);
+
+    // just signalization :)
+    delay(200);
+    draw_naw_screen(editval);
+  }
+    
   }
 
   tmp1 = knob_up.read();
