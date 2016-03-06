@@ -350,25 +350,25 @@ void loop() {
 
   if (digitalRead(2) == LOW) {
     if (btn1) {
-      if (editval==1) {
+//      if (editval==1) {
 /*        tmp1 = navdata.com1_use_a;
         navdata.com1_use_a = navdata.com1_sby_a;
         navdata.com1_sby_a = tmp1;
         tmp1 = navdata.com1_use_b;
         navdata.com1_use_b = navdata.com1_sby_b;
         navdata.com1_sby_b = tmp1;
-*/        Serial.println("C1X");
-      } else if (editval==2) {
+*///        Serial.println("C1X");
+//      } else if (editval==2) {
 /*        tmp1 = navdata.nav1_use_a;
         navdata.nav1_use_a = navdata.nav1_sby_a;
         navdata.nav1_sby_a = tmp1;
         tmp1 = navdata.nav1_use_b;
         navdata.nav1_use_b = navdata.nav1_sby_b;
         navdata.nav1_sby_b = tmp1;
-*/        Serial.println("N1X");
-      } else {
+*/ //       Serial.println("N1X");
+//      } else {
         editval=0;
-      }
+//      }
       draw_naw_screen(editval);
       btn1 = 0;
       last_btn_millis=millis();
