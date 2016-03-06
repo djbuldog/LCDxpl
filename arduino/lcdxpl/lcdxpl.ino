@@ -1,5 +1,58 @@
 /* Inspired by:
  * https://github.com/jmasnik/ArduinoXPL
+ * 
+ * TODO:
+ * - add more screens and controls
+ *   make code as dynamic as possible
+ *   
+ *   Examples:
+ *   
+ *   screen&control schema 1
+ *   - COM1, COM1 stby, NAV1, NAV1 stby, ADF, SQK
+ *   - down rot = change snd val
+ *   - up rot = change fst val
+ *   - down rot btn = select next editval
+ *   - down rot btn = select prev editval
+ *   - black btn = command switch use - stby
+ *   
+ *   screen&control schema 2
+ *   - C152 .. COM, NAV, ADF, SQK
+ *   - down rot = change snd val
+ *   - up rot = change fst val
+ *   - down rot btn = select next editval
+ *   - down rot btn = select prev editval
+ *   
+ *   screen&control schema 3
+ *   - C152 .. COM, NAV, ADF, SQK
+ *   - down rot = select editval
+ *   - up rot = change val
+ *   
+ *   screen&control schema 4
+ *   - GPS
+ *   - down rot = command gps right knob big
+ *   - up rot = command gps right knob low
+ *   - down/up rot btn = command gps enter
+ *   
+ * Another ideas
+ * - change screen according to loaded plane
+ *   dont allow GPS on plane without GPS
+ *   dont allow COM2, COMX stby on plane without
+ * - switch off LCD in case of batter/master off
+ * - optimize serial port transfers
+ *   we dont need to read changes of variables which are not displayed
+ *   
+ * How to define multiple screen??
+ * 
+ * Class screen
+ * - private const store editvals
+ * - public func printscreen
+ * - public selEdit(int) // 0 or + or -
+ *   - public nextEdit() // next editval (rotate maxeditval), redraw scren
+ *   - public prevEdit() // prev
+ *   - public noEdit()
+ * - public rotChange(int rotid, int change);
+ * - public buttonPressed(int btn);
+ * 
  */
 
 #include <LiquidCrystal.h>
@@ -9,15 +62,17 @@ LiquidCrystal lcd(A3, A2, 14, 15, A0, A1);
 Encoder knob_down(9,8);
 Encoder knob_up(7,6);
 
-#define SER_BUF_SIZE  25
-
 uint8_t editval = 0;
+
 uint8_t btn1 = 1;
 uint8_t btn2 = 1;
 uint8_t btn3 = 1;
 unsigned long last_btn_millis = 0; //btn debauncing
 int8_t last_knob_up = 0;
 int8_t last_knob_down = 0;
+
+#define SER_BUF_SIZE  25
+
 char    serbuf[SER_BUF_SIZE];
 uint8_t serpos;
 
@@ -79,7 +134,8 @@ const struct s_ser_parser {
                    {"SQK" , OP_INT, SQK_LIMIT,
                       OFFSETOF(squawk), OFFSETOF(squawk)},
                    {NULL, OP_NONE, 0, 0} };
-/*
+
+/* // screen&control schema 1
 const struct s_editvals {
   uint16_t inc1;
   uint8_t inc2;
@@ -92,6 +148,8 @@ const struct s_editvals {
                  {1000, 100, 5}, //SQK high
                  {10, 1, 5} };   //SQK low
 */
+
+/* // screen&control schema 2
 const struct s_editvals {
   uint16_t inc1;
   uint8_t inc2;
@@ -103,34 +161,25 @@ const struct s_editvals {
                  {10, 1, 4},     //ADF low
                  {1000, 100, 5}, //SQK high
                  {10, 1, 5} };   //SQK low
+*/
 
-
-/*
- * dava rotacni
- * cudl na rot1 by vybiral dalsi element
- * cudl na rot2 by vybiral predchozi element
- * otaceni by menilo hodnotu
- * elemetny by byly com1, nav1, squawkAB, squawkCD, ..
- * special tlacitko.. u com/nav prehozeni hodnoty na aktivni
- * u squawk/adf funkce zadna...
- * 
- * na GPS screen by rot enkodery mohly fungovat jako ty dva ovladace
- * oba rot cudl funkce cudlu na gps?
- * special tlacitko bez funkce?
- * 
- * jeste potrebuji alespon jedno tlacitko na zmenu screenu
- * nebo vyuzit to special? kdyz bude vypnuty edit rezim, tak by prepinal? :)
- * funkce
- * - pokud nav/com.. prehod use za stby
- * - pokud adf/squawk.. tak zrus edit mode....
- * - pokud nebude v edit mode, tak zmen obrazovku
- * 
- * alt screen
- * jeden rot +1 QNH, druhy +10
- * 
- * AP screen....
- * jeste by bylo dobre kontrolovat letadlo... a pokud letadlo pristroj nema (gps treba), tak by nebylo k dispozici
- */
+// screen&control schema 3
+const struct s_editvals {
+  uint16_t inc1;
+  uint8_t inc2;
+  uint8_t idpar;
+} editvals[] = { {0, 0, 6},      //NULL
+                 {1, 0, 0},      //COM STBY
+                 {2, 1, 0},      //COM STBY
+                 {1, 0, 2},      //NAV STBY
+                 {5, 1, 2},      //NAV STBY
+                 {100, 0, 4},    //ADF high
+                 {10, 0, 4},     //ADF high
+                 {1, 0, 4},      //ADF low
+                 {1000, 0, 5},   //SQK high
+                 {100, 0, 5},    //SQK high
+                 {10, 0, 5},     //SQK low
+                 {1, 0, 5} };    //SQK low
 
 /*
 const char *sc[][4] = { // ------ screen 0 ---- 
@@ -177,7 +226,11 @@ void draw_static(uint8_t screen) {
   }
 }
 */
-/*
+
+/* // screen&control schema 1
+
+uint8_t maxeditval = 7;
+
 void draw_naw_screen(uint8_t seledit) {
   char screen[4][21];
   char adf_squawk[3+4+1];
@@ -206,6 +259,11 @@ void draw_naw_screen(uint8_t seledit) {
   }
 }
 */
+
+/* // screen&control schema 2
+
+uint8_t maxeditval = 7;
+
 void draw_naw_screen(uint8_t seledit) {
   char screen[4][21];
   char adf_squawk[3+4+1];
@@ -227,6 +285,43 @@ void draw_naw_screen(uint8_t seledit) {
           lr[4], adf_squawk[0], lr[6], adf_squawk[1], lr[5], adf_squawk[2], lr[7]);
   sprintf(&screen[3][0],"   SQUAWK %c%c %c%c%c %c%c ", 
           lr[8], adf_squawk[3], adf_squawk[4], lr[9], adf_squawk[5], adf_squawk[6], lr[11]);
+
+  for (uint8_t i=0; i<4; ++i) {
+    lcd.setCursor(0,i);
+    lcd.print(screen[i]);
+  }
+}
+*/
+
+// screen&control schema 3
+
+uint8_t maxeditval = 12;
+
+void draw_naw_screen(uint8_t seledit) {
+  char screen[4][21];
+  char adf_squawk[3+4+1];
+  char lr[] = " .  .          ";
+
+  if (seledit--) {
+    uint8_t i = 0;
+    if(seledit==6) ++i;
+    if(seledit>7) ++i;
+    if(seledit==10) ++i;
+    lr[seledit+(seledit/2)-i]='[';
+    lr[seledit+(seledit/2)-i+1]=']';
+  }
+
+  sprintf(&adf_squawk[0],"%03hu%04u", navdata.adf, navdata.squawk);
+
+  sprintf(&screen[0][0],"C152  COM %c%03hu%c%02hu%c  ", 
+          lr[0], navdata.com1_use_a, lr[1], navdata.com1_use_b, lr[2]);
+  sprintf(&screen[1][0],"      NAV %c%03hu%c%02hu%c  ",
+          lr[3], navdata.nav1_use_a, lr[4], navdata.nav1_use_b, lr[5]);
+  sprintf(&screen[2][0],"      ADF %c%c%c%c%c%c%c   ", 
+          lr[6], adf_squawk[0], lr[7], adf_squawk[1], lr[8], adf_squawk[2], lr[9]);
+  sprintf(&screen[3][0],"   SQUAWK %c%c%c%c%c%c%c%c%c ", 
+          lr[10], adf_squawk[3], lr[11], adf_squawk[4], lr[12], 
+          adf_squawk[5], lr[13], adf_squawk[6], lr[14]);
 
   for (uint8_t i=0; i<4; ++i) {
     lcd.setCursor(0,i);
@@ -285,7 +380,7 @@ void loop() {
 
   if (digitalRead(3) == LOW) {
     if (btn2) {
-      editval=(editval+1)%7;
+      editval=(editval+1)%maxeditval;
       draw_naw_screen(editval);
       btn2 = 0;
       last_btn_millis=millis();
@@ -297,7 +392,7 @@ void loop() {
 
   if (digitalRead(5) == LOW) {
     if (btn3) {
-      editval=(editval)?(editval-1)%7:6;
+      editval=(editval)?(editval-1)%maxeditval:maxeditval-1;
       draw_naw_screen(editval);
       btn3 = 0;
       last_btn_millis=millis();
@@ -321,6 +416,22 @@ void loop() {
   tmp1 = knob_up.read();
   tmp2 = knob_down.read();
 
+/*
+  static unsigned long last_tx_ready = 0; //detect TX troubles
+  if ((millis()>1000)&&(!Serial.availableForWrite())) {
+    if ((millis()-last_tx_ready)>1000) {
+      lcd.setCursor(0,0);
+      lcd.print("TX:");
+      lcd.print(Serial.availableForWrite());
+      lcd.print(" ");
+      void (*reboot)(void) = 0;
+      reboot();
+    }
+  } else {
+    last_tx_ready=millis();
+  }
+*/
+
 //  if ((tmp1 != last_knob_up) || (tmp2 != last_knob_down)) {
   if ( ((tmp1-last_knob_up)>3) || ((tmp2-last_knob_down)>3) ||
        ((tmp1-last_knob_up)<-3) || ((tmp2-last_knob_down)<-3) ) {
@@ -335,17 +446,26 @@ void loop() {
       Serial.println(tmp1);*/
       knob_up.write(0);
       last_knob_up = 0;
-      offset = sp_ptr->offset1;
-      inc = (editvals[editval].inc1)*(tmp1/4);
+
+      editval=(editval||tmp1>0)?(editval+(tmp1/4))%maxeditval:maxeditval-1;
+      draw_naw_screen(editval);
+      
+//      offset = sp_ptr->offset1;
+//      inc = (editvals[editval].inc1)*(tmp1/4);
     }
 
     if (tmp2 != last_knob_down) {
 /*      Serial.write("knob down: ");
-      Serial.println(tmp2);*/
+      Serial.println(tmp2);*/    
       knob_down.write(0);
-      last_knob_down = 0;
-      offset = sp_ptr->offset2;
-      inc = (editvals[editval].inc2)*(tmp2/4);
+      last_knob_down = 0;    
+
+//      offset = sp_ptr->offset2;
+//      inc = (editvals[editval].inc2)*(tmp2/4);      
+
+      offset = (editvals[editval].inc2)?sp_ptr->offset2:sp_ptr->offset1;
+      inc = (editvals[editval].inc1)*(tmp2/4);      
+
     }
 
     if (sp_ptr->op == OP_INT) {
