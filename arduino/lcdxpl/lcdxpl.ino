@@ -1,57 +1,43 @@
-/* Inspired by:
+/* 
+ * Inspired by:
  * https://github.com/jmasnik/ArduinoXPL
  * 
  * TODO:
- * - add more screens and controls
- *   make code as dynamic as possible
  *   
- *   Examples:
- *   
- *   screen&control schema 1
- *   - COM1, COM1 stby, NAV1, NAV1 stby, ADF, SQK
- *   - down rot = change snd val
- *   - up rot = change fst val
- *   - down rot btn = select next editval
- *   - down rot btn = select prev editval
- *   - black btn = command switch use - stby
- *   
- *   screen&control schema 2
- *   - C152 .. COM, NAV, ADF, SQK
- *   - down rot = change snd val
- *   - up rot = change fst val
- *   - down rot btn = select next editval
- *   - down rot btn = select prev editval
- *   
- *   screen&control schema 3
- *   - C152 .. COM, NAV, ADF, SQK
- *   - down rot = select editval
- *   - up rot = change val
- *   
- *   screen&control schema 4
- *   - GPS
- *   - down rot = command gps right knob big
- *   - up rot = command gps right knob low
- *   - down/up rot btn = command gps enter
- *   
- * Another ideas
+ * Near ideas:
  * - change screen according to loaded plane
  *   dont allow GPS on plane without GPS
  *   dont allow COM2, COMX stby on plane without
  * - switch off LCD in case of batter/master off
  * - optimize serial port transfers
  *   we dont need to read changes of variables which are not displayed
+ * - optimize memory
+ *   we dont need to update and store hidden screen objects
+ *   construct screen object after switching
  *   
- * How to define multiple screen??
- * 
- * Class screen
- * - private const store editvals
- * - public func printscreen
- * - public selEdit(int) // 0 or + or -
- *   - public nextEdit() // next editval (rotate maxeditval), redraw scren
- *   - public prevEdit() // prev
- *   - public noEdit()
- * - public rotChange(int rotid, int change);
- * - public buttonPressed(int btn);
+ * Another ideas
+ * - dynamic screens
+ *   allow user to define own screen through serial link
+ *   one screen element = one object
+ *   object members: 
+ *     lcd coords, ser_code, value storage, limits, ..
+ *   object methods
+ *     select(n), unselect(), nextval(), prevval()
+ * - display only mode
+ *   dont change values.. 
+ *   just send cmds and display received values through UART
+ * - display only mode 2
+ *   act as output (display) and input USB device only
+ *   
+ * Comparing structure vs class driven screen code
+ *   
+ *   struct driven:
+ *   Size 12 866 B (44%) of 28 672 B
+ *   Global variables 591 B (23%), 1 969 B for locals of 2 560 B
+ *   
+ *   class driven:
+ *   Size 12 952 B (45%) of 28 672 B
+ *   Global variables 602 B (23%), 1 958 B for locals of 2 560 B
  * 
  */
 
@@ -62,14 +48,13 @@ LiquidCrystal lcd(A3, A2, 14, 15, A0, A1);
 Encoder knob_down(9,8);
 Encoder knob_up(7,6);
 
-uint8_t editval = 0;
-
 uint8_t btn1 = 1;
 uint8_t btn2 = 1;
 uint8_t btn3 = 1;
 unsigned long last_btn_millis = 0; //btn debauncing
 int8_t last_knob_up = 0;
 int8_t last_knob_down = 0;
+int8_t last_screen = 0;
 
 #define SER_BUF_SIZE  25
 
@@ -81,6 +66,7 @@ uint8_t serpos;
 #define COM_LIMIT   2
 #define DEG_LIMIT   3
 #define SQK_LIMIT   4
+#define MAX_LIMIT   5
 
 const struct s_data_limits {
   uint16_t  max; // max number
@@ -90,11 +76,18 @@ const struct s_data_limits {
                 { 117, 108, 0 },  // NAV
                 { 136, 118, 0 },  // COM
                 { 359, 0, 0 },    // DEG
-                { 7777, 0, 7 }};  // SQK
+                { 7777, 0, 7 },   // SQK
+                { 65535, 0, 0 }}; // MAX
 
 struct s_nav_data {
   uint16_t adf;
-  uint16_t squawk;    
+  uint16_t squawk;
+  uint16_t dis;
+  uint16_t gs;
+  uint16_t ete;
+  uint16_t dtk;
+  uint16_t dbg;
+  uint16_t trk;
   uint8_t com1_use_a;
   uint8_t com1_use_b;
   uint8_t com1_sby_a;
@@ -103,7 +96,9 @@ struct s_nav_data {
   uint8_t nav1_use_b;
   uint8_t nav1_sby_a;
   uint8_t nav1_sby_b;
-} navdata = { dlimits[ADF_LIMIT].min, 0, 
+} navdata = { dlimits[ADF_LIMIT].min, 0, 0, 0, 0, 
+              dlimits[DEG_LIMIT].min, dlimits[DEG_LIMIT].min, 
+              dlimits[DEG_LIMIT].min,
               dlimits[COM_LIMIT].min, 0, dlimits[COM_LIMIT].min, 0, 
               dlimits[NAV_LIMIT].min, 0, dlimits[NAV_LIMIT].min, 0};
 
@@ -133,53 +128,19 @@ const struct s_ser_parser {
                       OFFSETOF(adf), OFFSETOF(adf)},
                    {"SQK" , OP_INT, SQK_LIMIT,
                       OFFSETOF(squawk), OFFSETOF(squawk)},
+                   {"DIS" , OP_INT, MAX_LIMIT,
+                      OFFSETOF(dis), OFFSETOF(dis)},
+                   {"GSp" , OP_INT, MAX_LIMIT,
+                      OFFSETOF(gs), OFFSETOF(gs)},
+                   {"ETE" , OP_INT, MAX_LIMIT,
+                      OFFSETOF(ete), OFFSETOF(ete)},
+                   {"DTK" , OP_INT, DEG_LIMIT,
+                      OFFSETOF(dtk), OFFSETOF(dtk)},
+                   {"DBG" , OP_INT, DEG_LIMIT,
+                      OFFSETOF(dbg), OFFSETOF(dbg)},
+                   {"TRK" , OP_INT, DEG_LIMIT,
+                      OFFSETOF(trk), OFFSETOF(trk)},
                    {NULL, OP_NONE, 0, 0} };
-
-/* // screen&control schema 1
-const struct s_editvals {
-  uint16_t inc1;
-  uint8_t inc2;
-  uint8_t idpar;
-} editvals[] = { {0, 0, 6},      //NULL
-                 {1, 2, 1},      //COM STBY
-                 {1, 5, 3},      //NAV STBY
-                 {100, 10, 4},   //ADF high
-                 {10, 1, 4},     //ADF low
-                 {1000, 100, 5}, //SQK high
-                 {10, 1, 5} };   //SQK low
-*/
-
-/* // screen&control schema 2
-const struct s_editvals {
-  uint16_t inc1;
-  uint8_t inc2;
-  uint8_t idpar;
-} editvals[] = { {0, 0, 6},      //NULL
-                 {1, 2, 0},      //COM STBY
-                 {1, 5, 2},      //NAV STBY
-                 {100, 10, 4},   //ADF high
-                 {10, 1, 4},     //ADF low
-                 {1000, 100, 5}, //SQK high
-                 {10, 1, 5} };   //SQK low
-*/
-
-// screen&control schema 3
-const struct s_editvals {
-  uint16_t inc1;
-  uint8_t inc2;
-  uint8_t idpar;
-} editvals[] = { {0, 0, 6},      //NULL
-                 {1, 0, 0},      //COM STBY
-                 {2, 1, 0},      //COM STBY
-                 {1, 0, 2},      //NAV STBY
-                 {5, 1, 2},      //NAV STBY
-                 {100, 0, 4},    //ADF high
-                 {10, 0, 4},     //ADF high
-                 {1, 0, 4},      //ADF low
-                 {1000, 0, 5},   //SQK high
-                 {100, 0, 5},    //SQK high
-                 {10, 0, 5},     //SQK low
-                 {1, 0, 5} };    //SQK low
 
 /*
 const char *sc[][4] = { // ------ screen 0 ---- 
@@ -227,14 +188,306 @@ void draw_static(uint8_t screen) {
 }
 */
 
-/* // screen&control schema 1
+class BaseScreen {
+  
+  public:
+    virtual void redraw()=0;
+    virtual void handleBtnPress(uint8_t btnid)=0;
+    virtual void handleRotEnStep(uint8_t rotid, int8_t val)=0;
+  
+};
 
-uint8_t maxeditval = 7;
+class EditableScreen : public BaseScreen {
 
-void draw_naw_screen(uint8_t seledit) {
+  private:
+    const uint8_t maxeditval;
+
+  protected:
+    uint8_t editval;
+
+    struct s_editvals {
+      uint16_t inc1;
+      uint8_t inc2;
+      uint8_t idpar;
+    };
+    
+    void modifyVal(const s_editvals editvals[], bool first, int8_t step);
+  
+  public:
+    EditableScreen(uint8_t maxeditval): maxeditval(maxeditval), editval(0) {}
+    void nextEditval() { changeEditval(1); };
+    void prevEditval() { changeEditval(-1); };
+    void resetEditval() { editval=0; redraw(); };
+    void changeEditval(int8_t val) { editval=(editval||val>0)?(editval+val)%maxeditval:maxeditval-1; redraw(); };
+};
+
+void EditableScreen::modifyVal(const s_editvals editvals[], bool first, int8_t step) {
+
+  struct s_ser_parser *sp_ptr;
+  sp_ptr = const_cast<s_ser_parser*>(&ser_parser[editvals[editval].idpar]);
+  uint8_t offset;
+  int16_t inc;
+
+  if (first) {
+
+    offset = (!editvals[editval].inc2)?sp_ptr->offset2:sp_ptr->offset1;
+    inc = (editvals[editval].inc1)*step;
+
+  } else {
+
+    offset = sp_ptr->offset2;
+    inc = (editvals[editval].inc2)*step;
+
+  }
+
+  if (sp_ptr->op == OP_INT) {
+    uint16_t *val;
+    val = (uint16_t*)((uint8_t*)&navdata + offset);
+
+    if (dlimits[sp_ptr->idlim].maxd) {
+
+      int8_t num = ((*val)/((inc<0)?-inc:inc))%10;
+      if ( ((num==dlimits[sp_ptr->idlim].maxd) && (inc>0)) || 
+           ((num==dlimits[sp_ptr->idlim].min) && (inc<0))) {
+        inc = -(dlimits[sp_ptr->idlim].maxd*inc);
+      }
+    }
+           
+    *val += inc;
+
+    if (!dlimits[sp_ptr->idlim].maxd) {
+      if ( ((*val) < dlimits[sp_ptr->idlim].min) ||
+           ((*val) > dlimits[sp_ptr->idlim].max)) {
+        *val-=inc;
+      }
+    }
+
+    Serial.print(sp_ptr->keyword);
+    Serial.println(*val);
+  }
+  
+  if (sp_ptr->op == OP_INTINT) {
+    uint8_t *val;
+    val = (uint8_t*)&navdata + offset;
+    *val += inc;
+
+    if (offset==sp_ptr->offset1) {
+      if ((*val) < dlimits[sp_ptr->idlim].min)
+        *val=dlimits[sp_ptr->idlim].max;
+      if ((*val) > dlimits[sp_ptr->idlim].max)
+        *val=dlimits[sp_ptr->idlim].min;
+    } else {
+      if (*val > 99) {
+        *val=(inc>0)?0:100+inc;
+      }
+    }
+
+    Serial.print(sp_ptr->keyword);
+    val = (uint8_t*)&navdata + sp_ptr->offset1;
+    Serial.print(*val);
+    Serial.print(".");
+    val = (uint8_t*)&navdata + sp_ptr->offset2;
+    if (*val<10) Serial.print("0");
+    Serial.println(*val);
+    
+  }
+
+  if (sp_ptr->op != OP_NONE) {
+//      Serial.println("refreshing screen\n");
+    redraw();
+  }
+}
+
+/* ****************************************************************** 
+ *  screen&control schema 3
+ *   - C152 .. COM, NAV, ADF, SQK
+ *   - down rot = select editval
+ *   - up rot = change val
+ *   
+*/
+
+class Screen3 : public EditableScreen {
+
+  private:
+    static const s_editvals editvals[];
+
+  public:
+    Screen3(): EditableScreen(12) {}
+    void redraw();
+    void handleBtnPress(uint8_t btnid);
+    void handleRotEnStep(uint8_t rotid, int8_t val);
+  
+};
+
+const Screen3::s_editvals 
+      Screen3::editvals[] =  { {0, 255, 12},     //NULL
+                               {1, 255, 0},      //COM USE high
+                               {2, 0, 0},        //COM USE low
+                               {1, 255, 2},      //NAV USE high
+                               {5, 0, 2},        //NAV USE low
+                               {100, 255, 4},    //ADF fst num
+                               {10, 255, 4},     //ADF snd num
+                               {1, 255, 4},      //ADF rd num
+                               {1000, 255, 5},   //SQK fst num
+                               {100, 255, 5},    //SQK snd num
+                               {10, 255, 5},     //SQK rd num
+                               {1, 255, 5} };    //SQK th num
+
+void Screen3::redraw() {
+  char screen[4][21];
+  char adf_squawk[3+4+1];
+  char lr[] = " .  .          ";
+  uint8_t seledit = editval;
+
+  if (seledit--) {
+    uint8_t i = 0;
+    if(seledit==6) ++i;
+    if(seledit>7) ++i;
+    if(seledit==10) ++i;
+    lr[seledit+(seledit/2)-i]='[';
+    lr[seledit+(seledit/2)-i+1]=']';
+  }
+
+  sprintf(&adf_squawk[0],"%03hu%04u", navdata.adf, navdata.squawk);
+
+  sprintf(&screen[0][0],"C152  COM %c%03hu%c%02hu%c  ", 
+          lr[0], navdata.com1_use_a, lr[1], navdata.com1_use_b, lr[2]);
+  sprintf(&screen[1][0],"v2    NAV %c%03hu%c%02hu%c  ",
+          lr[3], navdata.nav1_use_a, lr[4], navdata.nav1_use_b, lr[5]);
+  sprintf(&screen[2][0],"      ADF %c%c%c%c%c%c%c   ", 
+          lr[6], adf_squawk[0], lr[7], adf_squawk[1], lr[8], adf_squawk[2], lr[9]);
+  sprintf(&screen[3][0],"   SQUAWK %c%c%c%c%c%c%c%c%c ", 
+          lr[10], adf_squawk[3], lr[11], adf_squawk[4], lr[12], 
+          adf_squawk[5], lr[13], adf_squawk[6], lr[14]);
+
+  for (uint8_t i=0; i<4; ++i) {
+    lcd.setCursor(0,i);
+    lcd.print(screen[i]);
+  }
+}
+
+void Screen3::handleBtnPress(uint8_t btnid) {
+  if (btnid==0) resetEditval();
+  if (btnid==1) nextEditval();
+  if (btnid==2) prevEditval(); 
+}
+
+void Screen3::handleRotEnStep(uint8_t rotid, int8_t val) {
+  if (rotid==0) changeEditval(val);
+  if (rotid==1) modifyVal(editvals, true, val);
+}
+
+/* ****************************************************************** 
+ *  screen&control schema 2
+ *   - C152 .. COM, NAV, ADF, SQK
+ *   - down rot = change snd val
+ *   - up rot = change fst val
+ *   - down rot btn = select next editval
+ *   - down rot btn = select prev editval
+*/
+
+class Screen2 : public EditableScreen {
+
+  private:
+    static const s_editvals editvals[];
+
+  public:
+    Screen2(): EditableScreen(7) {}
+    void redraw();
+    void handleBtnPress(uint8_t btnid);
+    void handleRotEnStep(uint8_t rotid, int8_t val);
+  
+};
+
+const Screen2::s_editvals 
+      Screen2::editvals[] = { {0, 0, 12},     //NULL
+                              {1, 2, 0},      //COM USE
+                              {1, 5, 2},      //NAV USE
+                              {100, 10, 4},   //ADF high
+                              {10, 1, 4},     //ADF low
+                              {1000, 100, 5}, //SQK high
+                              {10, 1, 5} };   //SQK low
+      
+void Screen2::redraw() {
+  
+  char screen[4][21];
+  char adf_squawk[3+4+1];
+  char lr[] = "            ";
+  uint8_t seledit = editval;
+
+  if (seledit--) {
+    lr[seledit*2]='[';
+    lr[seledit*2+1]=']';
+    if (seledit==5) lr[9]='[';
+  }
+
+  sprintf(&adf_squawk[0],"%03hu%04u", navdata.adf, navdata.squawk);
+
+  sprintf(&screen[0][0],"C152  COM %c%03hu.%02hu%c  ", 
+          lr[0], navdata.com1_use_a, navdata.com1_use_b, lr[1]);
+  sprintf(&screen[1][0],"v1    NAV %c%03hu.%02hu%c  ",
+          lr[2], navdata.nav1_use_a, navdata.nav1_use_b, lr[3]);
+  sprintf(&screen[2][0],"      ADF %c%c%c%c%c%c%c   ", 
+          lr[4], adf_squawk[0], lr[6], adf_squawk[1], lr[5], adf_squawk[2], lr[7]);
+  sprintf(&screen[3][0],"   SQUAWK %c%c %c%c%c %c%c ", 
+          lr[8], adf_squawk[3], adf_squawk[4], lr[9], adf_squawk[5], adf_squawk[6], lr[11]);
+
+  for (uint8_t i=0; i<4; ++i) {
+    lcd.setCursor(0,i);
+    lcd.print(screen[i]);
+  }
+  
+}
+
+void Screen2::handleBtnPress(uint8_t btnid) {
+  if (btnid==0) resetEditval();
+  if (btnid==1) nextEditval();
+  if (btnid==2) prevEditval(); 
+}
+
+void Screen2::handleRotEnStep(uint8_t rotid, int8_t val) {
+  if (rotid==0) modifyVal(editvals, true, val);
+  if (rotid==1) modifyVal(editvals, false, val);
+}
+
+/* ******************************************************************
+ *   screen&control schema 1
+ *   - COM1, COM1 stby, NAV1, NAV1 stby, ADF, SQK
+ *   - down rot = change snd val
+ *   - up rot = change fst val
+ *   - down rot btn = select next editval
+ *   - down rot btn = select prev editval
+ *   - black btn = command switch use - stby
+*/
+
+class Screen1 : public EditableScreen {
+
+  private:
+    static const s_editvals editvals[];
+
+  public:
+    Screen1(): EditableScreen(7) {}
+    void redraw();
+    void handleBtnPress(uint8_t btnid);
+    void handleRotEnStep(uint8_t rotid, int8_t val);
+  
+};
+
+const Screen1::s_editvals 
+      Screen1::editvals[] = { {0, 0, 12},     //NULL
+                              {1, 2, 1},      //COM STBY
+                              {1, 5, 3},      //NAV STBY
+                              {100, 10, 4},   //ADF high
+                              {10, 1, 4},     //ADF low
+                              {1000, 100, 5}, //SQK high
+                              {10, 1, 5} };   //SQK low
+      
+void Screen1::redraw() {
+  
   char screen[4][21];
   char adf_squawk[3+4+1];
   char lr[] = "()()        ";
+  uint8_t seledit = editval;
 
   if (seledit--) {
     lr[seledit*2]='[';
@@ -257,78 +510,76 @@ void draw_naw_screen(uint8_t seledit) {
     lcd.setCursor(0,i);
     lcd.print(screen[i]);
   }
+  
 }
+
+void Screen1::handleBtnPress(uint8_t btnid) {
+  if (btnid==0) resetEditval();
+  if (btnid==1) nextEditval();
+  if (btnid==2) prevEditval(); 
+}
+
+void Screen1::handleRotEnStep(uint8_t rotid, int8_t val) {
+  if (rotid==0) modifyVal(editvals, true, val);
+  if (rotid==1) modifyVal(editvals, false, val);
+}
+
+/* ****************************************************************** 
+ *   screen&control schema 4
+ *   - GPS
+ *   - down rot = command gps right knob big
+ *   - up rot = command gps right knob low
+ *   - down/up rot btn = command gps enter
 */
 
-/* // screen&control schema 2
+class Screen4 : public BaseScreen {
+  
+  public:
+    void redraw();
+    void handleBtnPress(uint8_t btnid);
+    void handleRotEnStep(uint8_t rotid, int8_t val);
+  
+};
 
-uint8_t maxeditval = 7;
-
-void draw_naw_screen(uint8_t seledit) {
+void Screen4::redraw() {
+  
   char screen[4][21];
   char adf_squawk[3+4+1];
-  char lr[] = "            ";
 
-  if (seledit--) {
-    lr[seledit*2]='[';
-    lr[seledit*2+1]=']';
-    if (seledit==5) lr[9]='[';
-  }
-
-  sprintf(&adf_squawk[0],"%03hu%04u", navdata.adf, navdata.squawk);
-
-  sprintf(&screen[0][0],"C152  COM %c%03hu.%02hu%c  ", 
-          lr[0], navdata.com1_use_a, navdata.com1_use_b, lr[1]);
-  sprintf(&screen[1][0],"      NAV %c%03hu.%02hu%c  ",
-          lr[2], navdata.nav1_use_a, navdata.nav1_use_b, lr[3]);
-  sprintf(&screen[2][0],"      ADF %c%c%c%c%c%c%c   ", 
-          lr[4], adf_squawk[0], lr[6], adf_squawk[1], lr[5], adf_squawk[2], lr[7]);
-  sprintf(&screen[3][0],"   SQUAWK %c%c %c%c%c %c%c ", 
-          lr[8], adf_squawk[3], adf_squawk[4], lr[9], adf_squawk[5], adf_squawk[6], lr[11]);
+  sprintf(&screen[0][0],"******* GPS ********");
+  sprintf(&screen[1][0],"DIS %5hu.%1hu  DTK %3hu", navdata.dis/10,
+          navdata.dis%10, navdata.dtk);
+  sprintf(&screen[2][0],"GS  %5hu.%1hu  DBG %3hu", navdata.gs/10,
+          navdata.gs%10, navdata.dbg);
+  sprintf(&screen[3][0],"ETE %4hu:%02hu  TRK %3hu", navdata.ete/60,
+          navdata.ete%60, navdata.trk);
 
   for (uint8_t i=0; i<4; ++i) {
     lcd.setCursor(0,i);
     lcd.print(screen[i]);
   }
+  
 }
-*/
 
-// screen&control schema 3
+void Screen4::handleBtnPress(uint8_t btnid) {
+  if (btnid==1) Serial.println("Gb1");
+  if (btnid==2) Serial.println("Gb2");
+}
 
-uint8_t maxeditval = 12;
-
-void draw_naw_screen(uint8_t seledit) {
-  char screen[4][21];
-  char adf_squawk[3+4+1];
-  char lr[] = " .  .          ";
-
-  if (seledit--) {
-    uint8_t i = 0;
-    if(seledit==6) ++i;
-    if(seledit>7) ++i;
-    if(seledit==10) ++i;
-    lr[seledit+(seledit/2)-i]='[';
-    lr[seledit+(seledit/2)-i+1]=']';
+void Screen4::handleRotEnStep(uint8_t rotid, int8_t val) {
+  if (rotid==0) {
+    if (val>0) Serial.println("G1p");
+    else Serial.println("G1l");
   }
-
-  sprintf(&adf_squawk[0],"%03hu%04u", navdata.adf, navdata.squawk);
-
-  sprintf(&screen[0][0],"C152  COM %c%03hu%c%02hu%c  ", 
-          lr[0], navdata.com1_use_a, lr[1], navdata.com1_use_b, lr[2]);
-  sprintf(&screen[1][0],"      NAV %c%03hu%c%02hu%c  ",
-          lr[3], navdata.nav1_use_a, lr[4], navdata.nav1_use_b, lr[5]);
-  sprintf(&screen[2][0],"      ADF %c%c%c%c%c%c%c   ", 
-          lr[6], adf_squawk[0], lr[7], adf_squawk[1], lr[8], adf_squawk[2], lr[9]);
-  sprintf(&screen[3][0],"   SQUAWK %c%c%c%c%c%c%c%c%c ", 
-          lr[10], adf_squawk[3], lr[11], adf_squawk[4], lr[12], 
-          adf_squawk[5], lr[13], adf_squawk[6], lr[14]);
-
-  for (uint8_t i=0; i<4; ++i) {
-    lcd.setCursor(0,i);
-    lcd.print(screen[i]);
+  if (rotid==1) {
+    if (val>0) Serial.println("G2p");
+    else Serial.println("G2l");
   }
 }
 
+/* ****************************************************************** */
+
+BaseScreen *screen = NULL;
 
 void setup()
 {
@@ -337,9 +588,12 @@ void setup()
   pinMode(2, INPUT_PULLUP);
   pinMode(3, INPUT_PULLUP);
   pinMode(5, INPUT_PULLUP);
-  draw_naw_screen(0);
   serpos=0;
   serbuf[serpos]='\0';
+  
+  screen = new Screen1();
+  screen->redraw();
+  last_screen = 0;
 }
 
 void loop() {
@@ -348,68 +602,53 @@ void loop() {
 
   if ((millis()-last_btn_millis)>100) {
 
-  if (digitalRead(2) == LOW) {
-    if (btn1) {
-//      if (editval==1) {
-/*        tmp1 = navdata.com1_use_a;
-        navdata.com1_use_a = navdata.com1_sby_a;
-        navdata.com1_sby_a = tmp1;
-        tmp1 = navdata.com1_use_b;
-        navdata.com1_use_b = navdata.com1_sby_b;
-        navdata.com1_sby_b = tmp1;
-*///        Serial.println("C1X");
-//      } else if (editval==2) {
-/*        tmp1 = navdata.nav1_use_a;
-        navdata.nav1_use_a = navdata.nav1_sby_a;
-        navdata.nav1_sby_a = tmp1;
-        tmp1 = navdata.nav1_use_b;
-        navdata.nav1_use_b = navdata.nav1_sby_b;
-        navdata.nav1_sby_b = tmp1;
-*/ //       Serial.println("N1X");
-//      } else {
-        editval=0;
-//      }
-      draw_naw_screen(editval);
-      btn1 = 0;
+    if (digitalRead(2) == LOW) {
+      if (btn1) {
+        if (screen) delete screen;
+        if (last_screen == 0) screen = new Screen4();
+        if (last_screen == 1) screen = new Screen1();
+        //if (last_screen == 2) screen = new Screen1();
+        last_screen = ++last_screen%2;
+        screen->redraw();
+        //screen->handleBtnPress(0);
+        btn1 = 0;
+        last_btn_millis=millis();
+      }
+    } else { 
+        btn1 = 1; 
+        last_btn_millis=millis();
+    }
+
+    if (digitalRead(3) == LOW) {
+      if (btn2) {
+        screen->handleBtnPress(1);
+        btn2 = 0;
+        last_btn_millis=millis();
+      }
+    } else { 
+      btn2 = 1; 
       last_btn_millis=millis();
     }
-  } else { 
-      btn1 = 1; 
-      last_btn_millis=millis();
-  }
 
-  if (digitalRead(3) == LOW) {
-    if (btn2) {
-      editval=(editval+1)%maxeditval;
-      draw_naw_screen(editval);
-      btn2 = 0;
-      last_btn_millis=millis();
-    }
-  } else { 
-    btn2 = 1; 
-    last_btn_millis=millis();
-  }
-
-  if (digitalRead(5) == LOW) {
-    if (btn3) {
-      editval=(editval)?(editval-1)%maxeditval:maxeditval-1;
-      draw_naw_screen(editval);
-      btn3 = 0;
+    if (digitalRead(5) == LOW) {
+      if (btn3) {
+        screen->handleBtnPress(2);
+        btn3 = 0;
+        last_btn_millis=millis();
+      }
+    } else { 
+      btn3 = 1; 
       last_btn_millis=millis();
     }
-  } else { 
-    btn3 = 1; 
-    last_btn_millis=millis();
-  }
 
-  if (!btn3 && !btn2) {
-    // try to fix LCD screen
-    lcd.begin(20,4);
+    if (!btn3 && !btn2) {
+      // try to fix LCD screen
+      lcd.begin(20,4);
 
-    // just signalization :)
-    delay(200);
-    draw_naw_screen(editval);
-  }
+      // just signalization :)
+      delay(200);
+      screen->redraw();
+    }
     
   }
 
@@ -432,106 +671,17 @@ void loop() {
   }
 */
 
-//  if ((tmp1 != last_knob_up) || (tmp2 != last_knob_down)) {
-  if ( ((tmp1-last_knob_up)>3) || ((tmp2-last_knob_down)>3) ||
-       ((tmp1-last_knob_up)<-3) || ((tmp2-last_knob_down)<-3) ) {
-
-    struct s_ser_parser *sp_ptr;
-    sp_ptr = const_cast<s_ser_parser*>(&ser_parser[editvals[editval].idpar]);
-    uint8_t offset;
-    int16_t inc;
-
-    if (tmp1 != last_knob_up) {
-/*      Serial.write("knob up: ");
-      Serial.println(tmp1);*/
-      knob_up.write(0);
-      last_knob_up = 0;
-
-      editval=(editval||tmp1>0)?(editval+(tmp1/4))%maxeditval:maxeditval-1;
-      draw_naw_screen(editval);
-      
-//      offset = sp_ptr->offset1;
-//      inc = (editvals[editval].inc1)*(tmp1/4);
-    }
-
-    if (tmp2 != last_knob_down) {
-/*      Serial.write("knob down: ");
-      Serial.println(tmp2);*/    
-      knob_down.write(0);
-      last_knob_down = 0;    
-
-//      offset = sp_ptr->offset2;
-//      inc = (editvals[editval].inc2)*(tmp2/4);      
-
-      offset = (editvals[editval].inc2)?sp_ptr->offset2:sp_ptr->offset1;
-      inc = (editvals[editval].inc1)*(tmp2/4);      
-
-    }
-
-    if (sp_ptr->op == OP_INT) {
-      uint16_t *val;
-      val = (uint16_t*)((uint8_t*)&navdata + offset);
-
-
-      if (dlimits[sp_ptr->idlim].maxd) {
-
-        int8_t num = ((*val)/((inc<0)?-inc:inc))%10;
-        if ( ((num==dlimits[sp_ptr->idlim].maxd) && (inc>0)) || 
-             ((num==dlimits[sp_ptr->idlim].min) && (inc<0))) {          
-          inc = -(dlimits[sp_ptr->idlim].maxd*inc);
-        }
-      }
-             
-      *val += inc;
-
-      if (!dlimits[sp_ptr->idlim].maxd) {
-        if ( ((*val) < dlimits[sp_ptr->idlim].min) ||
-             ((*val) > dlimits[sp_ptr->idlim].max)) {
-          *val-=inc;
-        }          
-      }
-
-      Serial.print(sp_ptr->keyword);
-      Serial.println(*val);
-/*      Serial.print(offset);
-      Serial.print("<- offset, val ptr->");
-      Serial.println((long)val);*/
-    }
-    
-    if (sp_ptr->op == OP_INTINT) {
-      uint8_t *val;
-      val = (uint8_t*)&navdata + offset;
-      *val += inc;
-
-      if (offset==sp_ptr->offset1) {
-        if ((*val) < dlimits[sp_ptr->idlim].min)
-          *val=dlimits[sp_ptr->idlim].max;
-        if ((*val) > dlimits[sp_ptr->idlim].max)
-          *val=dlimits[sp_ptr->idlim].min;
-      } else {
-        if (*val > 99) {
-          *val=(inc>0)?0:100+inc;
-        }
-      }
-
-      Serial.print(sp_ptr->keyword);
-      val = (uint8_t*)&navdata + sp_ptr->offset1;
-      Serial.print(*val);
-      Serial.print(".");
-      val = (uint8_t*)&navdata + sp_ptr->offset2;
-      if (*val<10) Serial.print("0");
-      Serial.println(*val);
-      
-/*      Serial.print(offset);
-      Serial.print("<- offset, val ptr->");
-      Serial.println((long)val);*/
-    }
-
-    if (sp_ptr->op != OP_NONE) {
-//      Serial.println("refreshing screen\n");
-      draw_naw_screen(editval);
-    }
-  }  
+  if (((tmp1-last_knob_up)>3) || ((tmp1-last_knob_up)<-3)) {
+    knob_up.write(0);
+    last_knob_up = 0;
+    screen->handleRotEnStep(0,tmp1/4);
+  }
+  
+  if (((tmp2-last_knob_down)>3) || ((tmp2-last_knob_down)<-3)) {
+    knob_down.write(0);
+    last_knob_down = 0;
+    screen->handleRotEnStep(1,tmp2/4);
+  }
 
   if(Serial.available() > 0) {
 
@@ -582,71 +732,20 @@ void loop() {
         }
         
 //        Serial.println("refreshing screen due to val update");
-        draw_naw_screen(editval);
+        screen->redraw();
       }
 
       serpos=0;
       serbuf[serpos]='\0';
 
     } else {
-/*
-      struct s_ser_parser *sp_ptr;
-      sp_ptr = const_cast<s_ser_parser*>(&ser_parser[editvals[editval].idpar]);
-      uint8_t offset;
-      int16_t inc;
-
-      if (c=='*') {
-        offset = sp_ptr->offset1;
-        inc = editvals[editval].inc1;
-      }
-      if (c=='+') {
-        offset = sp_ptr->offset2;
-        inc = editvals[editval].inc2;
-      }
-      if (c=='/') {
-        offset = sp_ptr->offset1;
-        inc = -editvals[editval].inc1;
-      }
-      if (c=='-') {
-        offset = sp_ptr->offset2;
-        inc = -editvals[editval].inc2;
-      }
-
-      if (sp_ptr->op == OP_INT) {
-        uint16_t *val;
-        val = (uint16_t*)((uint8_t*)&navdata + offset);
-        *val += inc;
-          
-        if ((*val) < dlimits[sp_ptr->idlim].min)
-          *val-=inc;
-        if ((*val) > dlimits[sp_ptr->idlim].max)
-          *val-=inc;
-      }
-    
-      if (sp_ptr->op == OP_INTINT) {
-        uint8_t *val;
-        val = (uint8_t*)&navdata + offset;
-        *val += inc;
-
-        if ((*val) < dlimits[sp_ptr->idlim].min)
-          *val=dlimits[sp_ptr->idlim].max;
-        if ((*val) > dlimits[sp_ptr->idlim].max)
-          *val=dlimits[sp_ptr->idlim].min;          
-      }
-
-      if (sp_ptr->op != OP_NONE) {
-        Serial.println("refreshing screen due to val update");
-        draw_naw_screen(editval);
-      } else {
-*/        if (serpos<SER_BUF_SIZE) {
-          serbuf[serpos++]=c;
-          serbuf[serpos]='\0';
-        }
-//      }
-      
+      if (serpos<SER_BUF_SIZE) {
+        serbuf[serpos++]=c;
+        serbuf[serpos]='\0';
+      }      
     }
   }
   
-  //delay(10);
+//  delay(10);
 
 }
