@@ -3,7 +3,7 @@ SRC_BASE	:=	../
 TARGET		:=	LCDxpl
 
 SOURCES = \
-	src/lcdxpl.cpp src/serial.cpp src/datarefs.cpp
+	src/lcdxpl.cpp src/serial.cpp src/datarefs.cpp src/commands.cpp
 
 LIBS = 
 
@@ -11,7 +11,7 @@ INCLUDES = \
 	-I$(SRC_BASE)/SDK/CHeaders/XPLM \
 	-I$(SRC_BASE)/SDK/CHeaders/Widgets
 
-DEFINES = -DAPL=0 -DIBM=0 -DLIN=1
+DEFINES = -DAPL=0 -DIBM=0 -DLIN=1 -DXPLM200
 
 XPLUGDIR = "/opt/X-Plane 10/Resources/plugins/"
 

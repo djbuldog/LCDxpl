@@ -1,5 +1,6 @@
 #include "datarefs.h"
 #include <cstring>
+#include <iomanip>  // setprecision
 
 void DataRef::assign(const std::string name, const std::string ser_code) {
 	//std::cerr << "LCDxpl: Called assign with " << name << ", " << ser_code << std::endl;
@@ -112,6 +113,38 @@ void DataRefFloat::update(std::string command) {
 }
 
 const std::string DataRefFloat::getValStr() {
+	std::stringstream ss;
+	ss << std::setprecision(1) << last;
+  return ss.str();
+}
+
+/* ******************************************************************* */
+
+void DataRefFloatInt::update(std::string command) {
+
+	if (ptr == NULL) return;
+
+	int val = int(XPLMGetDataf(ptr)*prec);
+	if (val!=last) {
+		changed = true;
+		last=val;
+	}  
+	
+	if (!command.empty()) {
+	  if (strncmp(command.c_str(),ser_code.c_str(),ser_code.size()) == 0) {
+	    std::istringstream is(command.c_str()+ser_code.size());
+	    is >> val;
+	    if (val!=last) {
+	      XPLMSetDataf(ptr,float(val/prec));
+	      changed = false;
+	      last=val;
+	    }
+	  }
+	}
+	
+}
+
+const std::string DataRefFloatInt::getValStr() {
 	std::stringstream ss;
 	ss << last;
   return ss.str();
