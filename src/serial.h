@@ -1,4 +1,5 @@
 #include <string>
+#include <vector>
 
 class Serial {
   
@@ -12,4 +13,5 @@ class Serial {
     void close();
     int write(const std::string msg);
     const std::string readln();
+    std::vector<std::string> getDevList();
 };

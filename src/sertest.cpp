@@ -9,7 +9,14 @@ using namespace std;
 main() {
   Serial ser;
   stringstream ss;
-  
+  vector<string> devlist;
+
+	cerr << "Available devices:" << endl;
+	devlist = ser.getDevList();
+	for(vector<string>::iterator it = devlist.begin(); it != devlist.end(); ++it) {
+		cerr << "item: " << *it << endl;
+	}
+
   cerr << "Openning serial" << endl;
   cerr << "ret: " << ser.open("/dev/ttyACM1") << endl;
 

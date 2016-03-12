@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include "XPLMProcessing.h"
+#include "XPLMMenus.h"
 
 #include "serial.h"
 #include "datarefs.h"
@@ -15,10 +16,48 @@ static Serial ser;
 static float callback_rate = -2.0;
 
 float FlightLoopCallback(float inElapsedSinceLastCall, float inElapsedTimeSinceLastFlightLoop, int inCounter, void* inRefcon);
+void LCDxplMenuHandler(void *, void *);
+
+#define DEFDEVICE "/dev/ttyACM1"
+struct menu {
+	XPLMMenuID	id;
+	std::vector<std::string> devlist;
+	long selected;
+} mymenu;
+
+void createMenu(std::string def) {
+
+	mymenu.devlist = ser.getDevList();
+	mymenu.devlist.insert(mymenu.devlist.begin(),"none");
+	mymenu.selected = 0;
+
+	for(std::vector<std::string>::iterator it = mymenu.devlist.begin(); it != mymenu.devlist.end(); ++it) {
+		std::cerr << "comparing '" << *it << "' to '" << DEFDEVICE << "'" << std::endl;
+		if ((*it) == def) mymenu.selected = it - mymenu.devlist.begin();
+	}
+
+	long id = 0;
+	for(std::vector<std::string>::iterator it = mymenu.devlist.begin(); it != mymenu.devlist.end(); ++it) {
+		std::cerr << "adding '" << it->c_str() << "' with id " << id << std::endl;
+		XPLMAppendMenuItem(mymenu.id, it->c_str(), (void *) id, 1);
+		XPLMCheckMenuItem(mymenu.id, id, (id==mymenu.selected)?xplm_Menu_Checked:xplm_Menu_Unchecked);
+		++id;
+	}
+
+	XPLMAppendMenuSeparator(mymenu.id);
+	XPLMAppendMenuItem(mymenu.id, "refresh", (void *) 99, 1);
+
+}
 
 PLUGIN_API int XPluginStart(char *outName, char *outSig, char *outDesc) {
 
-	ser.open("/dev/ttyACM1");
+	int PluginSubMenuItem;
+
+	PluginSubMenuItem = XPLMAppendMenuItem(XPLMFindPluginsMenu(), "LCDxpl port", NULL, 1);
+	mymenu.id = XPLMCreateMenu("LCDxpl port", XPLMFindPluginsMenu(), PluginSubMenuItem, LCDxplMenuHandler, NULL);
+
+	createMenu(DEFDEVICE);
+	ser.open(mymenu.devlist.at(mymenu.selected));
 
 	strcpy(outName, "LCDxpl");
 	strcpy(outSig, "bari2.eu");
@@ -111,3 +150,23 @@ float FlightLoopCallback(float inElapsedSinceLastCall, float inElapsedTimeSinceL
 	return callback_rate;
 
 }
+
+void LCDxplMenuHandler(void * inMenuRef, void * inItemRef) {
+
+	if (((long)inItemRef != 99)&&((long)inItemRef != mymenu.selected)) {
+		XPLMCheckMenuItem(mymenu.id, mymenu.selected, xplm_Menu_Unchecked);
+		mymenu.selected = (long)inItemRef;
+		XPLMCheckMenuItem(mymenu.id, mymenu.selected, xplm_Menu_Checked);
+		std::cerr << "switching to " << mymenu.devlist.at(mymenu.selected) << std::endl;
+		ser.close();
+		ser.open(mymenu.devlist.at(mymenu.selected));
+	}
+
+	if ((long)inItemRef == 99) {
+		XPLMClearAllMenuItems(mymenu.id);
+		createMenu(mymenu.devlist.at(mymenu.selected));
+		if (!mymenu.selected) ser.close();
+	}
+
+}
+
