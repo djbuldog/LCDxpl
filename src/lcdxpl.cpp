@@ -100,14 +100,10 @@ PLUGIN_API int XPluginStart(char *outName, char *outSig, char *outDesc) {
 		}
 	}
 
-	XPLMRegisterFlightLoopCallback(FlightLoopCallback,callback_rate,NULL);
-
 	return 1;
 }
 
 PLUGIN_API void	XPluginStop(void) {
-
-	XPLMUnregisterFlightLoopCallback(FlightLoopCallback, NULL);
 
 	for(std::vector<DataRef*>::iterator it = datarefs.begin(); it != datarefs.end(); ++it) {
 		delete *it;
@@ -119,10 +115,16 @@ PLUGIN_API void	XPluginStop(void) {
 }
 
 PLUGIN_API void XPluginDisable(void) {
+
+	XPLMUnregisterFlightLoopCallback(FlightLoopCallback, NULL);
+
 }
 
 PLUGIN_API int XPluginEnable(void) {
+
+	XPLMRegisterFlightLoopCallback(FlightLoopCallback,callback_rate,NULL);
 	return 1;
+
 }
 
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFromWho, int inMessage, void *inParam) {
