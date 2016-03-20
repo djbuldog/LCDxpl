@@ -1,30 +1,16 @@
 #include "serial.h"
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
 #include <fcntl.h>
 #include <termios.h>
+#include <unistd.h>
 
 #include <dirent.h>
 
 int Serial::open(const std::string tty) {
 
 	struct termios tio;
-	memset(&tio, 0, sizeof(tio));
-
-	tio.c_iflag=0;
-	tio.c_oflag=0;
-
-	// CS8 - 8n1 (8bit, no parity, 1 stopbit)
-	// CREAD - enable receiving characters
-	// CLOCAL - local connection, no modem control
-	tio.c_cflag=CS8|CREAD|CLOCAL;
-
-	// tio.c_lflag=0;
-	// tio.c_cc[VMIN]=1;
-	// tio.c_cc[VTIME]=5;
-	tio.c_lflag |= ICANON; // Enable Cannonical Mode
 
 	if (opened) {
 		return 1;
@@ -35,14 +21,28 @@ int Serial::open(const std::string tty) {
 		return 2;
 	}
 
-	if (cfsetospeed(&tio,B9600) < 0 || cfsetispeed(&tio,B9600) < 0) {
-		close();
+	if (isatty(tty_fd)!=1) {
+		::close(tty_fd);
 		return 3;
 	}
 
+	memset(&tio, 0, sizeof(tio));
+
+	// CS8    - character size 8
+	// CREAD  - enable receiving
+	// CLOCAL - local connection, no modem control
+	tio.c_cflag=CS8|CREAD|CLOCAL;
+	// Enable Cannonical Mode
+	tio.c_lflag=ICANON;
+
+	if (cfsetospeed(&tio,B9600) < 0 || cfsetispeed(&tio,B9600) < 0) {
+		::close(tty_fd);
+		return 5;
+	}
+
 	if (tcsetattr(tty_fd,TCSANOW,&tio) < 0) {
-		close();
-		return 4;
+		::close(tty_fd);
+		return 6;
 	}
 
 	opened = true;
@@ -55,6 +55,14 @@ Serial::~Serial() {
 
 void Serial::close() {
 	if (opened) {
+
+	/* FIXME:
+	 * when open bad tty device.... and send some data
+	 * close takes a few second - XPL hungs for that time
+	 * flushing in/out doesnt help....
+	 * closing in the background (serial thread) could help...
+	*/
+		//tcflush(tty_fd,TCIOFLUSH);
 		::close(tty_fd);
 		opened = false;
 	}

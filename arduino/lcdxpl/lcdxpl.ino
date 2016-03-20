@@ -44,13 +44,17 @@
 #include <LiquidCrystal.h>
 #include <Encoder.h>
 
-LiquidCrystal lcd(A3, A2, 14, 15, A0, A1);
-Encoder knob_down(9,8);
-Encoder knob_up(7,6);
+LiquidCrystal lcd(A3, A2, 10, 16, 14, 15);
+Encoder knob_down(9,3);
+Encoder knob_up(2,6);
 
 uint8_t btn1 = 1;
 uint8_t btn2 = 1;
 uint8_t btn3 = 1;
+uint8_t btn4 = 1;
+uint8_t sw1 = HIGH;
+uint8_t sw2 = HIGH;
+uint8_t sw3 = HIGH;
 unsigned long last_btn_millis = 0; //btn debauncing
 int8_t last_knob_up = 0;
 int8_t last_knob_down = 0;
@@ -187,7 +191,13 @@ void draw_static(uint8_t screen) {
   }
 }
 */
-
+/*
+int freeRam () {
+  extern int __heap_start, *__brkval; 
+  int v; 
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval); 
+}
+*/
 class BaseScreen {
   
   public:
@@ -231,12 +241,12 @@ void EditableScreen::modifyVal(const s_editvals editvals[], bool first, int8_t s
   if (first) {
 
     offset = (!editvals[editval].inc2)?sp_ptr->offset2:sp_ptr->offset1;
-    inc = (editvals[editval].inc1)*step;
+    inc = (editvals[editval].inc1);
 
   } else {
 
     offset = sp_ptr->offset2;
-    inc = (editvals[editval].inc2)*step;
+    inc = (editvals[editval].inc2);
 
   }
 
@@ -246,20 +256,25 @@ void EditableScreen::modifyVal(const s_editvals editvals[], bool first, int8_t s
 
     if (dlimits[sp_ptr->idlim].maxd) {
 
-      int8_t num = ((*val)/((inc<0)?-inc:inc))%10;
-      if ( ((num==dlimits[sp_ptr->idlim].maxd) && (inc>0)) || 
-           ((num==dlimits[sp_ptr->idlim].min) && (inc<0))) {
-        inc = -(dlimits[sp_ptr->idlim].maxd*inc);
-      }
-    }
-           
-    *val += inc;
+      int8_t num, num2;
+      
+      num = ((*val)/inc)%10;
+      num2 = num + step - dlimits[sp_ptr->idlim].min;
+      num2 %= dlimits[sp_ptr->idlim].maxd + 1 - dlimits[sp_ptr->idlim].min;
+      if (num2<0) num2 += dlimits[sp_ptr->idlim].maxd + 1;
+      num2 += dlimits[sp_ptr->idlim].min;
 
-    if (!dlimits[sp_ptr->idlim].maxd) {
+      *val += (num2-num)*inc;
+      
+    } else {
+
+      inc*=step;
+      *val+=inc;
       if ( ((*val) < dlimits[sp_ptr->idlim].min) ||
            ((*val) > dlimits[sp_ptr->idlim].max)) {
         *val-=inc;
       }
+      
     }
 
     Serial.print(sp_ptr->keyword);
@@ -269,6 +284,8 @@ void EditableScreen::modifyVal(const s_editvals editvals[], bool first, int8_t s
   if (sp_ptr->op == OP_INTINT) {
     uint8_t *val;
     val = (uint8_t*)&navdata + offset;
+
+    inc *= step;
     *val += inc;
 
     if (offset==sp_ptr->offset1) {
@@ -515,8 +532,10 @@ void Screen1::redraw() {
 
 void Screen1::handleBtnPress(uint8_t btnid) {
   if (btnid==0) resetEditval();
-  if (btnid==1) nextEditval();
-  if (btnid==2) prevEditval(); 
+  if ((btnid==1)||(btnid==3)) nextEditval();
+  if ((btnid==2)||(btnid==4)) prevEditval(); 
+  if (btnid==5) Serial.println("n1b"); 
+  if (btnid==6) Serial.println("c1b");
 }
 
 void Screen1::handleRotEnStep(uint8_t rotid, int8_t val) {
@@ -564,6 +583,10 @@ void Screen4::redraw() {
 void Screen4::handleBtnPress(uint8_t btnid) {
   if (btnid==1) Serial.println("Gb1");
   if (btnid==2) Serial.println("Gb2");
+  if (btnid==3) Serial.println("Gb3");
+  if (btnid==4) Serial.println("Gb4");
+  if (btnid==5) Serial.println("Gb5");
+  if (btnid==6) Serial.println("Gb6");
 }
 
 void Screen4::handleRotEnStep(uint8_t rotid, int8_t val) {
@@ -585,9 +608,13 @@ void setup()
 {
   Serial.begin(9600); 
   lcd.begin(20,4);
-  pinMode(2, INPUT_PULLUP);
-  pinMode(3, INPUT_PULLUP);
+  pinMode(4, INPUT_PULLUP);
   pinMode(5, INPUT_PULLUP);
+  pinMode(7, INPUT_PULLUP);
+  pinMode(8, INPUT_PULLUP);
+  pinMode(1, INPUT_PULLUP);
+  pinMode(A0, INPUT_PULLUP);
+  pinMode(A1, INPUT_PULLUP);
   serpos=0;
   serbuf[serpos]='\0';
   
@@ -599,10 +626,34 @@ void setup()
 void loop() {
   char c;
   int8_t tmp1, tmp2;
+  int a;
 
   if ((millis()-last_btn_millis)>100) {
 
-    if (digitalRead(2) == LOW) {
+    a = analogRead(A0) / 50;
+    if (a<5) {
+      if (btn4) {
+        screen->handleBtnPress(3+a);
+        btn4 = 0;
+        last_btn_millis=millis();
+      }
+    } else { 
+      btn4 = 1; 
+      last_btn_millis=millis();
+    }
+
+    if (digitalRead(4) == LOW) {
+      if (btn2) {
+        screen->handleBtnPress(1);
+        btn2 = 0;
+        last_btn_millis=millis();
+      }
+    } else { 
+      btn2 = 1; 
+      last_btn_millis=millis();
+    }
+
+    if (digitalRead(A1) == LOW) {
       if (btn1) {
         if (screen) delete screen;
         if (last_screen == 0) screen = new Screen4();
@@ -619,7 +670,7 @@ void loop() {
         last_btn_millis=millis();
     }
 
-    if (digitalRead(3) == LOW) {
+    if (digitalRead(4) == LOW) {
       if (btn2) {
         screen->handleBtnPress(1);
         btn2 = 0;
@@ -638,6 +689,27 @@ void loop() {
       }
     } else { 
       btn3 = 1; 
+      last_btn_millis=millis();
+    }
+
+    if (digitalRead(1) != sw1) {
+      Serial.print(F("sw1"));
+      Serial.println(!!sw1);
+      sw1 = !sw1;
+      last_btn_millis=millis();
+    }
+
+    if (digitalRead(7) != sw2) {
+      Serial.print(F("sw2"));
+      Serial.println(!!sw2);
+      sw2 = !sw2;
+      last_btn_millis=millis();
+    }
+
+    if (digitalRead(8) != sw3) {
+      Serial.print(F("sw3"));
+      Serial.println(!!sw3);
+      sw3 = !sw3;
       last_btn_millis=millis();
     }
 
@@ -689,9 +761,8 @@ void loop() {
     
     if (c==10) {
 
-      Serial.write("Received: ");
-      Serial.write(serbuf);
-      Serial.write('\n');
+      Serial.print(F("Received: "));
+      Serial.println(serbuf);
 
       struct s_ser_parser *sp_ptr;
       sp_ptr = const_cast<s_ser_parser*>(&ser_parser[0]);

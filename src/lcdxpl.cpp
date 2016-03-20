@@ -18,7 +18,7 @@ static float callback_rate = -2.0;
 float FlightLoopCallback(float inElapsedSinceLastCall, float inElapsedTimeSinceLastFlightLoop, int inCounter, void* inRefcon);
 void LCDxplMenuHandler(void *, void *);
 
-#define DEFDEVICE "/dev/ttyACM1"
+#define DEFDEVICE "/dev/ttyACM0"
 struct menu {
 	XPLMMenuID	id;
 	std::vector<std::string> devlist;
@@ -28,7 +28,7 @@ struct menu {
 void createMenu(std::string def) {
 
 	mymenu.devlist = ser.getDevList();
-	mymenu.devlist.insert(mymenu.devlist.begin(),"none");
+	mymenu.devlist.insert(mymenu.devlist.begin(),"None");
 	mymenu.selected = 0;
 
 	for(std::vector<std::string>::iterator it = mymenu.devlist.begin(); it != mymenu.devlist.end(); ++it) {
@@ -45,7 +45,9 @@ void createMenu(std::string def) {
 	}
 
 	XPLMAppendMenuSeparator(mymenu.id);
-	XPLMAppendMenuItem(mymenu.id, "refresh", (void *) 99, 1);
+	XPLMAppendMenuItem(mymenu.id, "Refresh List", (void *) 99, 1);
+	XPLMAppendMenuSeparator(mymenu.id);
+	XPLMAppendMenuItem(mymenu.id, "Reinitialize", (void *) 98, 1);
 
 }
 
@@ -69,7 +71,21 @@ PLUGIN_API int XPluginStart(char *outName, char *outSig, char *outDesc) {
 	commands.push_back(new Command("sim/GPS/g430n1_chapter_dn","G2l"));
 
 	commands.push_back(new Command("sim/GPS/g430n1_cursor","Gb2"));
-	commands.push_back(new Command("sim/GPS/g430n1_ent","Gb1"));
+	commands.push_back(new Command("sim/GPS/g430n1_fpl","Gb1"));
+	commands.push_back(new Command("sim/GPS/g430n1_ent","Gb3"));
+	commands.push_back(new Command("sim/GPS/g430n1_menu","Gb4"));
+	commands.push_back(new Command("sim/GPS/g430n1_clr","Gb5"));
+	commands.push_back(new Command("sim/GPS/g430n1_direct","Gb6"));
+
+	commands.push_back(new Command("sim/radios/com1_standy_flip","c1b"));
+	commands.push_back(new Command("sim/radios/nav1_standy_flip","n1b"));
+
+	commands.push_back(new Command("sim/systems/avionics_on","sw11"));
+	commands.push_back(new Command("sim/systems/avionics_off","sw10"));
+	commands.push_back(new Command("sim/electrical/battery_1_on","sw31"));
+	commands.push_back(new Command("sim/electrical/battery_1_off","sw30"));
+	commands.push_back(new Command("sim/electrical/generator_1_on","sw21"));
+	commands.push_back(new Command("sim/electrical/generator_1_off","sw20"));
 
 	datarefs.push_back(new DataRefInt("sim/cockpit2/radios/actuators/transponder_code","SQK"));
 	datarefs.push_back(new DataRefInt("sim/cockpit2/radios/actuators/adf1_frequency_hz","ADF"));
@@ -154,19 +170,27 @@ float FlightLoopCallback(float inElapsedSinceLastCall, float inElapsedTimeSinceL
 
 void LCDxplMenuHandler(void * inMenuRef, void * inItemRef) {
 
-	if (((long)inItemRef != 99)&&((long)inItemRef != mymenu.selected)) {
+	if (((long)inItemRef < 98)&&((long)inItemRef != mymenu.selected)) {
 		XPLMCheckMenuItem(mymenu.id, mymenu.selected, xplm_Menu_Unchecked);
 		mymenu.selected = (long)inItemRef;
 		XPLMCheckMenuItem(mymenu.id, mymenu.selected, xplm_Menu_Checked);
 		std::cerr << "switching to " << mymenu.devlist.at(mymenu.selected) << std::endl;
 		ser.close();
+		std::cerr << "previous serial closed..." << std::endl;
 		ser.open(mymenu.devlist.at(mymenu.selected));
+		std::cerr << "new serial opened..." << std::endl;
 	}
 
 	if ((long)inItemRef == 99) {
 		XPLMClearAllMenuItems(mymenu.id);
 		createMenu(mymenu.devlist.at(mymenu.selected));
 		if (!mymenu.selected) ser.close();
+	}
+
+	if ((long)inItemRef == 98) {
+		for(std::vector<DataRef*>::iterator it = datarefs.begin(); it != datarefs.end(); ++it) {
+			ser.write((*it)->getSerStr());
+		}
 	}
 
 }
