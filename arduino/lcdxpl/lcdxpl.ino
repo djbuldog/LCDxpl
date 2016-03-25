@@ -5,10 +5,20 @@
  * TODO:
  *   
  * Near ideas:
+ * - new AP screen
+ *   ***** autopilot *****
+ *   [x] AP   [x] ALT 0100
+ *   [x] NAV  [x] HDG  350
+ *   mode activated through 4 btns
+ *   ALT/HDG changed through rotenc
+ * - new fly screen
+ *          QNH
+ *     1022 hpa / 2992   
+ *        balance
+ *     H +5  / V + 10
  * - change screen according to loaded plane
  *   dont allow GPS on plane without GPS
  *   dont allow COM2, COMX stby on plane without
- * - switch off LCD in case of batter/master off
  * - optimize serial port transfers
  *   we dont need to read changes of variables which are not displayed
  * - optimize memory
@@ -55,7 +65,7 @@ uint8_t btn4 = 1;
 uint8_t sw1 = HIGH;
 uint8_t sw2 = HIGH;
 uint8_t sw3 = HIGH;
-unsigned long last_btn_millis = 0; //btn debauncing
+unsigned long last_btn_millis = 0; //btn debouncing
 int8_t last_knob_up = 0;
 int8_t last_knob_down = 0;
 int8_t last_screen = 0;
@@ -146,51 +156,6 @@ const struct s_ser_parser {
                       OFFSETOF(trk), OFFSETOF(trk)},
                    {NULL, OP_NONE, 0, 0} };
 
-/*
-const char *sc[][4] = { // ------ screen 0 ---- 
-                        { "COM1 000.000  SQUAWK",
-                          "COM2 000.000 0 0 0 0",
-                          "NAV1 000.000 AD1 000",
-                          "NAV2 000.000 AD2 000" },
-                        // ------ screen 1 ---- 
-                        { "COM1 000.00 (000.00)",
-                          "NAV1 000.00 (000.00)",
-                          "    ** SQUAWK **    ",
-                          "      0 7 7 7       " },
-                        // ------ screen 1 ----
-                        { "COM1 000.00 (000.00)",
-                          "NAV1 000.00 (000.00)",
-                          "     ADF  0 0 0     ",
-                          "   QUAWK  0 7 7 7   " },
-                        // ------ screen 1 ----
-                        { "    COM1  000.00    ",
-                          "    NAV1  000.00    ",
-                          "     ADF  0 0 0     ",
-                          "   QUAWK  0 7 7 7   " },
-                        // ------ screen 1 ----
-                        { "     COM  NAV       ",
-                          "  000.00  000.00    ",
-                          "     ADF  0 0 0     ",
-                          "   QUAWK  0 7 7 7   " },
-                        // ------ screen 1 ---- 
-                        { "        QNH         ",
-                          "  1022 hpa / 2992   ",
-                          "       SQUAWK       ",
-                          "      0 7 7 7       " },
-                        // ------ screen GPS---
-                        { "LKTB [. .#.| |. . .]",
-                          "DIS 51.10    DTK 98 ",
-                          "GS  112      DBG 97 ",
-                          "ETE 27:80    TRK 238" },
-                        };
-
-void draw_static(uint8_t screen) {
-  for (uint8_t i=0; i<4; ++i) {
-    lcd.setCursor(0,i);
-    lcd.print(sc[screen][i]);
-  }
-}
-*/
 /*
 int freeRam () {
   extern int __heap_start, *__brkval; 
@@ -608,15 +573,26 @@ void setup()
 {
   Serial.begin(9600); 
   lcd.begin(20,4);
+  serpos=0;
+  serbuf[serpos]='\0';
+
+  // rotary enc btn pins
   pinMode(4, INPUT_PULLUP);
   pinMode(5, INPUT_PULLUP);
+
+  // switch pins
   pinMode(7, INPUT_PULLUP);
   pinMode(8, INPUT_PULLUP);
   pinMode(1, INPUT_PULLUP);
-  pinMode(A0, INPUT_PULLUP);
+
+  // black btn pin
   pinMode(A1, INPUT_PULLUP);
-  serpos=0;
-  serbuf[serpos]='\0';
+
+  // analog multibutton pin
+  pinMode(A0, INPUT_PULLUP);
+
+  // LCD backlight on/off pin
+  pinMode(0, OUTPUT);
   
   screen = new Screen1();
   screen->redraw();
@@ -639,17 +615,6 @@ void loop() {
       }
     } else { 
       btn4 = 1; 
-      last_btn_millis=millis();
-    }
-
-    if (digitalRead(4) == LOW) {
-      if (btn2) {
-        screen->handleBtnPress(1);
-        btn2 = 0;
-        last_btn_millis=millis();
-      }
-    } else { 
-      btn2 = 1; 
       last_btn_millis=millis();
     }
 
@@ -695,6 +660,7 @@ void loop() {
     if (digitalRead(1) != sw1) {
       Serial.print(F("sw1"));
       Serial.println(!!sw1);
+      digitalWrite(0, sw1);
       sw1 = !sw1;
       last_btn_millis=millis();
     }
