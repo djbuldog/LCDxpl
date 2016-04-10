@@ -85,7 +85,9 @@ PLUGIN_API int XPluginStart(char *outName, char *outSig, char *outDesc) {
 	commands.push_back(new Command("sim/electrical/battery_1_on","sw31"));
 	commands.push_back(new Command("sim/electrical/battery_1_off","sw30"));
 	commands.push_back(new Command("sim/electrical/generator_1_on","sw21"));
+	commands.push_back(new Command("sim/electrical/generator_2_on","sw21"));
 	commands.push_back(new Command("sim/electrical/generator_1_off","sw20"));
+	commands.push_back(new Command("sim/electrical/generator_2_off","sw20"));
 
 	datarefs.push_back(new DataRefInt("sim/cockpit2/radios/actuators/transponder_code","SQK"));
 	datarefs.push_back(new DataRefInt("sim/cockpit2/radios/actuators/adf1_frequency_hz","ADF"));
