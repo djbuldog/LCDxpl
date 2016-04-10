@@ -19,8 +19,17 @@ main() {
 	}
 
 	// testing close() bug
+
+#if LIN
+	string devbad("/dev/ttyACM1");
+	string devok("/dev/ttyACM0");
+#else
+	string devbad("COM2");
+	string devok("COM1");
+#endif
+
 	cerr << "Openning bad serial" << endl;
-	cerr << "ret: " << ser.open("/dev/ttyACM1") << endl;
+	cerr << "ret: " << ser.open(devbad) << endl;
 
 	cerr << "Writing some data.." << endl;
 	ss << "SQK" << 9988 << endl;
@@ -31,7 +40,7 @@ main() {
 
 	// testing value change through serial
 	cerr << "Openning serial" << endl;
-	cerr << "ret: " << ser.open("/dev/ttyACM0") << endl;
+	cerr << "ret: " << ser.open(devok) << endl;
 
 	ss << "SQK" << 124 << endl;
 	ser.write(ss.str());

@@ -1,9 +1,18 @@
 #include <string>
 #include <vector>
 
+#if IBM
+#include <windows.h>
+#endif
+
 class Serial {
 
+#if LIN
 	int tty_fd;
+#else
+	HANDLE com_handle;
+#endif
+
 	bool opened;
 
 	public:

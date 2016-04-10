@@ -118,14 +118,48 @@ std::vector<std::string> Serial::getDevList() {
 
 #else
 
+/* -------------------------------------------------------------------------- */
+/* WINDOWS part                                                               */
+/* ---------------------------------------------------------------------------*/
+
 int Serial::open(const std::string tty) {
 
 	if (opened) {
 		return 1;
 	}
 
-	//FIXME: NOT IMPLEMENTED
+	com_handle = CreateFileA(tty.c_str(), GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+	if (com_handle == INVALID_HANDLE_VALUE) {
+		return 2;
+	}
 
+	DCB port_settings;
+	memset(&port_settings, 0, sizeof(port_settings));
+	port_settings.DCBlength = sizeof(port_settings);
+
+	if(!BuildCommDCBA("baud=9600 parity=N data=8 stop=1 dtr=on rts=on", &port_settings)) {
+		CloseHandle(com_handle);
+		return 5;
+	}
+
+	if(!SetCommState(com_handle, &port_settings)) {
+		CloseHandle(com_handle);
+		return 6;
+	}
+
+	COMMTIMEOUTS Cptimeouts;
+
+	Cptimeouts.ReadIntervalTimeout = MAXDWORD;
+	Cptimeouts.ReadTotalTimeoutMultiplier = 0;
+	Cptimeouts.ReadTotalTimeoutConstant = 0;
+	Cptimeouts.WriteTotalTimeoutMultiplier = 0;
+	Cptimeouts.WriteTotalTimeoutConstant = 0;
+
+	if(!SetCommTimeouts(com_handle, &Cptimeouts)) {
+		CloseHandle(com_handle);
+		return 7;
+	}
+	
 	opened = true;
 	return 0; 
 }
@@ -136,20 +170,22 @@ Serial::~Serial() {
 
 void Serial::close() {
 	if (opened) {
-
-		//FIXME: NOT IMPLEMENTED
+		CloseHandle(com_handle);
 		opened = false;
 	}
 }
 
 int Serial::write(const std::string msg) {
 
+	int n;
+
 	if (!opened) {
 		return -2;
 	}
 
-	//FIXME: NOT IMPLEMENTED
-	//return ::write(tty_fd, msg.c_str(), msg.size());
+	if(WriteFile(com_handle, msg.c_str(), msg.size(), (LPDWORD)((void *)&n), NULL)) {
+		return n;
+	}
 
 	return 0;
 
@@ -164,10 +200,11 @@ const std::string Serial::readln() {
 		return "";
 	}
 
-	//FIXME: NOT IMPLEMENTED
-	
-	//res = read(tty_fd, buf, 255);
-	//if (res == -1) res=0;
+	if (!ReadFile(com_handle, buf, 255, (LPDWORD)((void *)&res), NULL)) {
+		res = 0;
+	}
+
+	if ((res < 0)||(res > 255)) res=0;
 	buf[res]=0;
 
 	return std::string(buf);
@@ -178,7 +215,19 @@ std::vector<std::string> Serial::getDevList() {
 
 	std::vector<std::string> list;
 
-	//FIXME: NOT IMPLEMENTED
+	//TODO: use QueryDosDevice approach istead of connect, it should be faster
+
+	HANDLE tmp;
+	char dev[64];
+
+	for (int i=1; i<20; i++) {
+		sprintf(dev,"COM%d",i);
+		com_handle = CreateFileA(dev, GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+		if (com_handle != INVALID_HANDLE_VALUE) {
+			list.push_back(dev);
+			CloseHandle(com_handle);
+		}
+	}
 
 	return list;
 }

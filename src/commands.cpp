@@ -13,9 +13,9 @@ void Command::perform(std::string command) {
   if (ptr == NULL) return;
 	
 	if (!command.empty()) {
-	  if (strncmp(command.c_str(),ser_code.c_str(),ser_code.size()) == 0) {
-	    XPLMCommandOnce(ptr);
-	  }
+		if (strncmp(command.c_str(),ser_code.c_str(),ser_code.size()) == 0) {
+		XPLMCommandOnce(ptr);
+		}
 	}
 
 
