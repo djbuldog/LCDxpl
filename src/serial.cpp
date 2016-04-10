@@ -2,6 +2,9 @@
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
+
+#if LIN
+
 #include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -112,4 +115,73 @@ std::vector<std::string> Serial::getDevList() {
 
 	return list;
 }
+
+#else
+
+int Serial::open(const std::string tty) {
+
+	if (opened) {
+		return 1;
+	}
+
+	//FIXME: NOT IMPLEMENTED
+
+	opened = true;
+	return 0; 
+}
+
+Serial::~Serial() {
+	close();
+}
+
+void Serial::close() {
+	if (opened) {
+
+		//FIXME: NOT IMPLEMENTED
+		opened = false;
+	}
+}
+
+int Serial::write(const std::string msg) {
+
+	if (!opened) {
+		return -2;
+	}
+
+	//FIXME: NOT IMPLEMENTED
+	//return ::write(tty_fd, msg.c_str(), msg.size());
+
+	return 0;
+
+}
+
+const std::string Serial::readln() {
+
+	char buf[256];
+	int res;
+
+	if (!opened) {
+		return "";
+	}
+
+	//FIXME: NOT IMPLEMENTED
+	
+	//res = read(tty_fd, buf, 255);
+	//if (res == -1) res=0;
+	buf[res]=0;
+
+	return std::string(buf);
+
+}
+
+std::vector<std::string> Serial::getDevList() {
+
+	std::vector<std::string> list;
+
+	//FIXME: NOT IMPLEMENTED
+
+	return list;
+}
+
+#endif
 

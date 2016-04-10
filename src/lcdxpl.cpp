@@ -39,7 +39,7 @@ void createMenu(std::string def) {
 	long id = 0;
 	for(std::vector<std::string>::iterator it = mymenu.devlist.begin(); it != mymenu.devlist.end(); ++it) {
 		std::cerr << "adding '" << it->c_str() << "' with id " << id << std::endl;
-		XPLMAppendMenuItem(mymenu.id, it->c_str(), (void *) id, 1);
+		XPLMAppendMenuItem(mymenu.id, it->c_str(), (void *)(uintptr_t)id, 1);
 		XPLMCheckMenuItem(mymenu.id, id, (id==mymenu.selected)?xplm_Menu_Checked:xplm_Menu_Unchecked);
 		++id;
 	}
@@ -170,9 +170,9 @@ float FlightLoopCallback(float inElapsedSinceLastCall, float inElapsedTimeSinceL
 
 void LCDxplMenuHandler(void * inMenuRef, void * inItemRef) {
 
-	if (((long)inItemRef < 98)&&((long)inItemRef != mymenu.selected)) {
+	if (((uintptr_t)inItemRef < 98)&&((uintptr_t)inItemRef != mymenu.selected)) {
 		XPLMCheckMenuItem(mymenu.id, mymenu.selected, xplm_Menu_Unchecked);
-		mymenu.selected = (long)inItemRef;
+		mymenu.selected = (uintptr_t)inItemRef;
 		XPLMCheckMenuItem(mymenu.id, mymenu.selected, xplm_Menu_Checked);
 		std::cerr << "switching to " << mymenu.devlist.at(mymenu.selected) << std::endl;
 		ser.close();
@@ -181,13 +181,13 @@ void LCDxplMenuHandler(void * inMenuRef, void * inItemRef) {
 		std::cerr << "new serial opened..." << std::endl;
 	}
 
-	if ((long)inItemRef == 99) {
+	if ((uintptr_t)inItemRef == 99) {
 		XPLMClearAllMenuItems(mymenu.id);
 		createMenu(mymenu.devlist.at(mymenu.selected));
 		if (!mymenu.selected) ser.close();
 	}
 
-	if ((long)inItemRef == 98) {
+	if ((uintptr_t)inItemRef == 98) {
 		for(std::vector<DataRef*>::iterator it = datarefs.begin(); it != datarefs.end(); ++it) {
 			ser.write((*it)->getSerStr());
 		}
