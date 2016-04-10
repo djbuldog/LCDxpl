@@ -124,7 +124,8 @@ void DataRefFloatInt::update(std::string command) {
 
 	if (ptr == NULL) return;
 
-	int val = int(XPLMGetDataf(ptr)*prec);
+	// 0.4 is for rounding the number
+	int val = int((XPLMGetDataf(ptr)*prec)+0.4);
 	if (val!=last) {
 		changed = true;
 		last=val;
