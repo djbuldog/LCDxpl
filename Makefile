@@ -158,6 +158,7 @@ clean:
 	@echo Cleaning out everything.
 	rm -rf $(BUILDDIR)
 	rm -rf sertest
+	rm -rf sertest.exe
 
 # Include any dependency turds, but don't error out if they don't exist.
 # On the first build, every .c is dirty anyway.  On future builds, if the
