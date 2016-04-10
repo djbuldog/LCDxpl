@@ -1,15 +1,16 @@
 BUILDDIR	:=	./build
-SRC_BASE	:=	../
+SDK_BASE	:=	../
 TARGET		:=	LCDxpl
+SRC_DIR		:= src
 
 SOURCES = \
-	src/lcdxpl.cpp src/serial.cpp src/datarefs.cpp src/commands.cpp
+	lcdxpl.cpp serial.cpp datarefs.cpp commands.cpp
 
 LIBS = 
 
 INCLUDES = \
-	-I$(SRC_BASE)/SDK/CHeaders/XPLM \
-	-I$(SRC_BASE)/SDK/CHeaders/Widgets
+	-I$(SDK_BASE)/SDK/CHeaders/XPLM \
+	-I$(SDK_BASE)/SDK/CHeaders/Widgets
 
 DEFINES = -DAPL=0 -DIBM=0 -DLIN=1 -DXPLM200
 
@@ -18,22 +19,22 @@ XPLUGDIR = "/opt/X-Plane 10/Resources/plugins/"
 ############################################################################
 
 
-VPATH = $(SRC_BASE)
+VPATH = $(SRC_DIR):$(SDK_BASE)
 	
 CSOURCES	:= $(filter %.c, $(SOURCES))
 CXXSOURCES	:= $(filter %.cpp, $(SOURCES))
 
-CDEPS		:= $(patsubst %.c, $(BUILDDIR)/obj32/%.cdep, $(CSOURCES))
-CXXDEPS		:= $(patsubst %.cpp, $(BUILDDIR)/obj32/%.cppdep, $(CXXSOURCES))
-COBJECTS	:= $(patsubst %.c, $(BUILDDIR)/obj32/%.o, $(CSOURCES))
-CXXOBJECTS	:= $(patsubst %.cpp, $(BUILDDIR)/obj32/%.o, $(CXXSOURCES))
+CDEPS		:= $(patsubst %.c, $(BUILDDIR)/obj32/lin/%.cdep, $(CSOURCES))
+CXXDEPS		:= $(patsubst %.cpp, $(BUILDDIR)/obj32/lin/%.cppdep, $(CXXSOURCES))
+COBJECTS	:= $(patsubst %.c, $(BUILDDIR)/obj32/lin/%.o, $(CSOURCES))
+CXXOBJECTS	:= $(patsubst %.cpp, $(BUILDDIR)/obj32/lin/%.o, $(CXXSOURCES))
 ALL_DEPS	:= $(sort $(CDEPS) $(CXXDEPS))
 ALL_OBJECTS	:= $(sort $(COBJECTS) $(CXXOBJECTS))
 
-CDEPS64			:= $(patsubst %.c, $(BUILDDIR)/obj64/%.cdep, $(CSOURCES))
-CXXDEPS64		:= $(patsubst %.cpp, $(BUILDDIR)/obj64/%.cppdep, $(CXXSOURCES))
-COBJECTS64		:= $(patsubst %.c, $(BUILDDIR)/obj64/%.o, $(CSOURCES))
-CXXOBJECTS64	:= $(patsubst %.cpp, $(BUILDDIR)/obj64/%.o, $(CXXSOURCES))
+CDEPS64			:= $(patsubst %.c, $(BUILDDIR)/obj64/lin/%.cdep, $(CSOURCES))
+CXXDEPS64		:= $(patsubst %.cpp, $(BUILDDIR)/obj64/lin/%.cppdep, $(CXXSOURCES))
+COBJECTS64		:= $(patsubst %.c, $(BUILDDIR)/obj64/lin/%.o, $(CSOURCES))
+CXXOBJECTS64	:= $(patsubst %.cpp, $(BUILDDIR)/obj64/lin/%.o, $(CXXSOURCES))
 ALL_DEPS64		:= $(sort $(CDEPS64) $(CXXDEPS64))
 ALL_OBJECTS64	:= $(sort $(COBJECTS64) $(CXXOBJECTS64))
 
@@ -71,22 +72,22 @@ $(BUILDDIR)/$(TARGET)/32/lin.xpl: $(ALL_OBJECTS)
 # - if the .c itself is touched, we remake the .o and the cdep, as expected.
 # - If any header file listed in the cdep turd is changed, rebuild the .o.
 
-$(BUILDDIR)/obj32/%.o : %.c
+$(BUILDDIR)/obj32/lin/%.o : %.c
 	mkdir -p $(dir $@)
 	g++ $(CFLAGS) -m32 -c $< -o $@
 	g++ $(CFLAGS) -MM -MT $@ -o $(@:.o=.cdep) $<
 
-$(BUILDDIR)/obj32/%.o : %.cpp
+$(BUILDDIR)/obj32/lin/%.o : %.cpp
 	mkdir -p $(dir $@)
 	g++ $(CFLAGS) -m32 -c $< -o $@
 	g++ $(CFLAGS) -MM -MT $@ -o $(@:.o=.cppdep) $<
 
-$(BUILDDIR)/obj64/%.o : %.c
+$(BUILDDIR)/obj64/lin/%.o : %.c
 	mkdir -p $(dir $@)
 	g++ $(CFLAGS) -m64 -c $< -o $@
 	g++ $(CFLAGS) -MM -MT $@ -o $(@:.o=.cdep) $<
 
-$(BUILDDIR)/obj64/%.o : %.cpp
+$(BUILDDIR)/obj64/lin/%.o : %.cpp
 	mkdir -p $(dir $@)
 	g++ $(CFLAGS) -m64 -c $< -o $@
 	g++ $(CFLAGS) -MM -MT $@ -o $(@:.o=.cppdep) $<
@@ -100,7 +101,7 @@ sertest:
 clean:
 	@echo Cleaning out everything.
 	rm -rf $(BUILDDIR)
-	rm sertest
+	rm -rf sertest
 
 # Include any dependency turds, but don't error out if they don't exist.
 # On the first build, every .c is dirty anyway.  On future builds, if the
