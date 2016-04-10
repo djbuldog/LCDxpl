@@ -158,7 +158,7 @@ int Serial::write(const std::string msg) {
 const std::string Serial::readln() {
 
 	char buf[256];
-	int res;
+	int res = 0;
 
 	if (!opened) {
 		return "";

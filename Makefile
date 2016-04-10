@@ -88,12 +88,12 @@ $(BUILDDIR)/$(TARGET)/64/lin.xpl: $(ALL_OBJECTS64)
 $(BUILDDIR)/$(TARGET)/32/win.xpl: $(ALL_OBJECTSW32)
 	@echo Linking $@
 	mkdir -p $(dir $@)
-	i686-w64-mingw32-g++ -m32 -static-libgcc -shared -Wl,--version-script=exports.txt -o $@ $(ALL_OBJECTSW32) $(LIBSW32)
+	i686-w64-mingw32-g++ -m32 -static-libgcc -static-libgcc -static-libstdc++ -shared -Wl,--version-script=exports.txt -o $@ $(ALL_OBJECTSW32) $(LIBSW32)
 
 $(BUILDDIR)/$(TARGET)/64/win.xpl: $(ALL_OBJECTSW64)
 	@echo Linking $@
 	mkdir -p $(dir $@)
-	x86_64-w64-mingw32-g++ -m64 -static-libgcc -shared -Wl,--version-script=exports.txt -o $@ $(ALL_OBJECTSW64) $(LIBSW64)
+	x86_64-w64-mingw32-g++ -m64 -static-libgcc -static-libgcc -static-libstdc++ -shared -Wl,--version-script=exports.txt -o $@ $(ALL_OBJECTSW64) $(LIBSW64)
 
 # Compiler rules
 
@@ -150,8 +150,9 @@ $(BUILDDIR)/obj64/win/%.o : %.cpp
 install:
 	cp -r $(BUILDDIR)/$(TARGET) $(XPLUGDIR)
 
-sertest:
-	g++ src/serial.cpp src/sertest.cpp -o sertest
+sertest: src/serial.cpp src/sertest.cpp
+	g++ src/serial.cpp src/sertest.cpp -o sertest -DLIN=1
+	i686-w64-mingw32-g++ src/serial.cpp src/sertest.cpp -o sertest.exe -DIBM=1 -static-libgcc -static-libstdc++
 
 clean:
 	@echo Cleaning out everything.
