@@ -3,9 +3,9 @@ TODO List
 Primary:
  - new AP screen
    ***** autopilot *****
-            [ ] ALT
-   [x] AP   [x] VS   +00
    [x] NAV  [x] HDG  000
+   [x] AP   [x] VS   +00
+            [ ] ALT
    mode AP/VS/NAV/HDG (de)activated through 4 btns
    VS/HDG changed through rotenc
    ALT (de)activated through upper rot enc btn
