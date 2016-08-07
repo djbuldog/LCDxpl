@@ -1,43 +1,6 @@
 /* 
  * Inspired by:
  * https://github.com/jmasnik/ArduinoXPL
- * 
- * TODO:
- *   
- * Near ideas:
- * - new AP screen
- *   ***** autopilot *****
- *   [x] AP   [x] ALT 0100
- *   [x] NAV  [x] HDG  350
- *   mode activated through 4 btns
- *   ALT/HDG changed through rotenc
- * - new fly screen
- *          QNH
- *     1022 hpa / 2992   
- *        balance
- *     H +5  / V + 10
- * - change screen according to loaded plane
- *   dont allow GPS on plane without GPS
- *   dont allow COM2, COMX stby on plane without
- * - optimize serial port transfers
- *   we dont need to read changes of variables which are not displayed
- * - optimize memory
- *   we dont need to update and store hidden screen objects
- *   construct screen object after switching
- *   
- * Another ideas
- * - dynamic screens
- *   allow user to define own screen through serial link
- *   one screen element = one object
- *   object members: 
- *     lcd coords, ser_code, value storage, limits, ..
- *   object methods
- *     select(n), unselect(), nextval(), prevval()
- * - display only mode
- *   dont change values.. 
- *   just send cmds and display received values through UART
- * - display only mode 2
- *   act as output (display) and input USB device only
  *   
  * Comparing structure vs class driven screen code
  *   
