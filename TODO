@@ -3,10 +3,12 @@ TODO List
 Primary:
  - new AP screen
    ***** autopilot *****
-   [x] AP   [x] ALT 0100
-   [x] NAV  [x] HDG  350
-   mode activated through 4 btns
-   ALT/HDG changed through rotenc
+            [ ] ALT
+   [x] AP   [x] VS   +00
+   [x] NAV  [x] HDG  000
+   mode AP/VS/NAV/HDG (de)activated through 4 btns
+   VS/HDG changed through rotenc
+   ALT (de)activated through upper rot enc btn
  - new fly screen
           QNH
      1022 hpa / 2992   
